@@ -1950,15 +1950,27 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private handlePartySwitch(index: number): void {
-    this.state = this.state.phase === 'forcedSwitch'
+    const previousState = this.state;
+    const wasForcedSwitch = this.state.phase === 'forcedSwitch';
+    this.state = wasForcedSwitch
       ? resolveForcedSwitchMonster(this.state, index)
       : resolveSwitchMonster(this.state, index, undefined, Math.random);
     const player = this.state.party[this.state.activeIndex];
     this.selectedMoveId = firstUsableMove(player);
     this.armedMoveId = this.selectedMoveId;
-    this.notice = this.state.lastLog;
+    this.notice = this.state.battleResultLog ?? this.state.lastLog;
     this.viewMode = 'command';
-    this.afterBattleAction();
+
+    // 자발적 교체는 적이 새로 나온 패시몬에게 반격한다(resolveSwitchMonster가 적 턴을 처리).
+    // 일반 공격과 똑같이 처리 연출 → 전투 메시지(적이 실제로 쓴 기술)를 보여준 뒤 다음 예고로 넘어간다.
+    // 이 흐름을 건너뛰면 플레이어가 "적의 P!"를 못 보고 곧장 다음 예고 P'만 보게 되어
+    // 예고한 기술과 실제 쓴 기술이 다른 것처럼 느껴진다.
+    // 강제 교체는 적 턴이 없으므로(전투 메시지 없음) 바로 넘어간다.
+    if (wasForcedSwitch) {
+      this.afterBattleAction();
+      return;
+    }
+    this.playBattleResolutionCue(previousState, this.state, () => this.showCombatMessage());
   }
 
   private handleCapsuleThrow(capsuleId: CapsuleId): void {

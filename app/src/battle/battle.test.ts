@@ -3,6 +3,7 @@ import { MOVES } from '../data/moves';
 import { MONSTERS } from '../data/monsters';
 import { actionFailureChance, actionFailureLabel, adjustedStatusChance, effectiveMaxHp, healingMultiplier } from '../data/statusConditions';
 import { createBossInstance, createMonsterInstance } from '../state/factory';
+import { BOSS_ATTACK_MOVE_IDS } from '../data/bossAttackMatchups';
 import type { EffectPrimitive, MonsterData, RunState, RuntimeMonster } from '../types/game';
 import { tryCapture } from './capture';
 import { calculateDamage, criticalHitChance, randomDamageVariance, rollsCriticalHit } from './damage';
@@ -839,6 +840,37 @@ describe('battle engine', () => {
 
     expect(result.lastLog).not.toContain('효과가 있다.');
     expect(result.lastLog).not.toContain('효과가 굉장했다.');
+  });
+
+  it('INVARIANT: a human enemy in phase=battle always has a committed plan across many turns', () => {
+    let battle = createBattleState({
+      party: [createMonster({
+        hp: 99999,
+        maxHp: 99999,
+        defense: 9999,
+        countermeasures: { direct: ['알벤다졸'], symptomTags: ['발열'] },
+      })],
+      enemy: createMonster({
+        name: '면역챔피언',
+        category: '보스 사람',
+        moveset: [...BOSS_ATTACK_MOVE_IDS],
+        moveSlots: [BOSS_ATTACK_MOVE_IDS[0]!, null, null, null],
+        plannedMoveId: BOSS_ATTACK_MOVE_IDS[0],
+        plannedMoveIds: [BOSS_ATTACK_MOVE_IDS[0]!],
+        isBoss: true,
+        isTrainer: true,
+        attack: 1,
+        hp: 99999,
+        maxHp: 99999,
+      }),
+    });
+
+    for (let turn = 0; turn < 60; turn += 1) {
+      battle = resolvePlayerMove(battle, 'coagulase', 1, 0, 0);
+      if (battle.phase === 'battle' && battle.enemy && (battle.enemy.isBoss || battle.enemy.isTrainer)) {
+        expect(battle.enemy.plannedMoveIds?.length ?? 0, `after turn ${turn}`).toBeGreaterThan(0);
+      }
+    }
   });
 
   it('does not seal boss moves after switching; damage is recalculated against the final active pathimon', () => {
