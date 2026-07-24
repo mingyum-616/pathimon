@@ -50,6 +50,7 @@ import {
   mobileControlOverlayInteractive,
   mobileHomeButtonLayout,
   normalizedSpriteScale,
+  paginateWrappedTextLines,
   partyMenuOptions,
   pathimonTypeBorderColor,
   pathimonTypeIconAssetPaths,
@@ -59,6 +60,7 @@ import {
   shouldPreserveBattleBgm,
   statusProfileMemoLines,
   statusConditionDetailLines,
+  stripMarkdownEmphasis,
   symptomDetailLines,
 } from '../ui/battleUi';
 import type { BattleActionId, BattleUnitPanelRole, PartyMenuPurpose, PathimonTypeIcon } from '../ui/battleUi';
@@ -110,6 +112,7 @@ export class BattleScene extends Phaser.Scene {
   private statusTooltipTimer?: Phaser.Time.TimerEvent;
   private battleMessageStage: BattleMessageStage = 'preparation';
   private battleMessageTimer?: Phaser.Time.TimerEvent;
+  private floorClearPage = 0;
 
   constructor() {
     super('BattleScene');
@@ -139,6 +142,7 @@ export class BattleScene extends Phaser.Scene {
     this.playerCombatSprite = undefined;
     this.battleMessageStage = 'preparation';
     this.battleMessageTimer = undefined;
+    this.floorClearPage = 0;
   }
 
   preload(): void {
@@ -842,7 +846,7 @@ export class BattleScene extends Phaser.Scene {
       .setAlpha(0.84);
     addBoxLabel(this, 34, 470, dex.statLine, { width: 170, height: 18, size: 11, minSize: 8, maxLines: 1 })
       .setAlpha(0.84);
-    this.drawMenuButton(34, 500, 84, 34, '기술 목록', () => {
+    this.drawMenuButton(34, 500, 84, 34, '효과 기술', () => {
       this.dexTab = 'moves';
       this.render();
     }, this.dexTab === 'moves');
@@ -853,8 +857,15 @@ export class BattleScene extends Phaser.Scene {
 
     drawPanel(this, 220, 394, 628, 168).setAlpha(0.98);
     if (this.dexTab === 'moves') {
+      addBoxLabel(this, 238, 402, `현재 선출: ${player.name}에게 효과적인 적의 처치`, {
+        width: 586,
+        height: 18,
+        size: 13,
+        minSize: 10,
+        maxLines: 1,
+      }).setAlpha(0.86);
       if (dex.moveRows.length === 0) {
-        addBoxLabel(this, 238, 428, '현재 선출에게 효과적인 적 처치가 없습니다.', {
+        addBoxLabel(this, 238, 434, '현재 선출에게 효과적인 적 처치가 없습니다.', {
           width: 586,
           height: 24,
           size: 14,
@@ -863,7 +874,7 @@ export class BattleScene extends Phaser.Scene {
         }).setAlpha(0.78);
       }
       dex.moveRows.forEach((row, index) => {
-        const y = 404 + index * 40;
+        const y = 426 + index * 33;
         const multiplierLabel = row.multiplier === 4 ? '직접 ×4' : row.multiplier === 2 ? '간접 ×2' : '';
         addBoxLabel(this, 238, y, `${row.name}${multiplierLabel ? ` · ${multiplierLabel}` : ''}`, {
           width: 190,
@@ -882,9 +893,9 @@ export class BattleScene extends Phaser.Scene {
         const description = row.matchReason
           ? `일치: ${row.matchReason} · ${row.description}`
           : row.description;
-        addBoxLabel(this, 258, y + 20, description, {
+        addBoxLabel(this, 258, y + 17, description, {
           width: 566,
-          height: 16,
+          height: 14,
           size: 11,
           minSize: 9,
           maxLines: 1,
@@ -1867,7 +1878,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     if (this.state.phase === 'floorClear') {
-      this.goNextFloor();
+      this.advanceFloorClearPage();
       return;
     }
 
@@ -1981,17 +1992,57 @@ export class BattleScene extends Phaser.Scene {
 
   private drawFloorClearView(): void {
     const title = `${this.state.floor}층 클리어`;
-    const log = this.notice || this.state.lastLog;
-    const body = log.startsWith(title) ? log.slice(title.length).trimStart() : log;
+    const body = this.floorClearBody();
+    const pages = this.floorClearPages(body);
+    const pageIndex = Math.min(this.floorClearPage, pages.length - 1);
+    this.floorClearPage = pageIndex;
     addLabel(this, 34, 410, title, 24);
-    addBoxLabel(this, 34, 448, body, {
+    if (pages.length > 1) {
+      const learningCodes = [...new Set(body.match(/\bL\d+\b/g) ?? [])];
+      const pageSubject = learningCodes.length === 1 ? learningCodes[0] : '학습 내용';
+      addBoxLabel(this, 608, 416, `${pageSubject} (${pageIndex + 1}/${pages.length})`, {
+        width: 116,
+        height: 18,
+        size: 12,
+        minSize: 9,
+        maxLines: 1,
+        align: 'right',
+      }).setAlpha(0.76);
+    }
+    addBoxLabel(this, 34, 448, pages[pageIndex], {
       width: 690,
       height: 82,
       size: 15,
       minSize: 10,
       maxLines: 4,
     }).setAlpha(0.9);
-    this.drawMenuButton(780, 444, 160, 48, '다음 층', () => this.goNextFloor());
+    const hasNextPage = pageIndex < pages.length - 1;
+    const buttonLabel = hasNextPage ? `다음 내용 ${pageIndex + 2}/${pages.length}` : '다음 층';
+    this.drawMenuButton(780, 444, 160, 48, buttonLabel, () => this.advanceFloorClearPage());
+  }
+
+  private floorClearBody(): string {
+    const title = `${this.state.floor}층 클리어`;
+    const log = this.notice || this.state.lastLog;
+    const body = log.startsWith(title) ? log.slice(title.length).trimStart() : log;
+    return stripMarkdownEmphasis(body);
+  }
+
+  private floorClearPages(body = this.floorClearBody()): string[] {
+    const measure = addLabel(this, -10000, -10000, body, 15).setWordWrapWidth(690, true);
+    const wrappedLines = measure.getWrappedText(body);
+    measure.destroy();
+    return paginateWrappedTextLines(wrappedLines, 4);
+  }
+
+  private advanceFloorClearPage(): void {
+    const pages = this.floorClearPages();
+    if (this.floorClearPage < pages.length - 1) {
+      this.floorClearPage += 1;
+      this.render();
+      return;
+    }
+    this.goNextFloor();
   }
 
   private drawDefeatView(): void {

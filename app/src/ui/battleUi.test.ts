@@ -38,6 +38,7 @@ import {
   lockedMoveOverlayPath,
   mobileHomeButtonLayout,
   normalizedSpriteScale,
+  paginateWrappedTextLines,
   pathimonTypeIconAssetPaths,
   pathimonSpriteAssets,
   pathimonTypeBorderColor,
@@ -51,6 +52,7 @@ import {
   symptomSummary,
   statusSummary,
   shouldPreserveBattleBgm,
+  stripMarkdownEmphasis,
 } from './battleUi';
 
 function createMonster(overrides: Partial<RuntimeMonster> = {}): RuntimeMonster {
@@ -78,6 +80,17 @@ function createMonster(overrides: Partial<RuntimeMonster> = {}): RuntimeMonster 
 }
 
 describe('battle UI helpers', () => {
+  it('preserves all wrapped learning lines across fixed-size pages', () => {
+    const lines = Array.from({ length: 9 }, (_, index) => `줄 ${index + 1}`);
+
+    expect(paginateWrappedTextLines(lines, 4)).toEqual([
+      '줄 1\n줄 2\n줄 3\n줄 4',
+      '줄 5\n줄 6\n줄 7\n줄 8',
+      '줄 9',
+    ]);
+    expect(stripMarkdownEmphasis('**요코가와흡충**과 *타카하시흡충*')).toBe('요코가와흡충과 타카하시흡충');
+  });
+
   it('places panels opposite the combat sprites like pokerogue', () => {
     const panelLayout = battleUnitPanelLayouts();
     const spriteLayout = battleSpriteLayouts();

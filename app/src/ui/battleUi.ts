@@ -365,6 +365,21 @@ export function normalizedSpriteScale(baseScale: number, textureWidth: number, r
   return textureWidth > referenceWidth ? baseScale * referenceWidth / textureWidth : baseScale;
 }
 
+export function paginateWrappedTextLines(lines: string[], maxLines: number): string[] {
+  const pageSize = Math.max(1, Math.floor(maxLines));
+  const pages: string[] = [];
+
+  for (let index = 0; index < lines.length; index += pageSize) {
+    pages.push(lines.slice(index, index + pageSize).join('\n'));
+  }
+
+  return pages.length > 0 ? pages : [''];
+}
+
+export function stripMarkdownEmphasis(text: string): string {
+  return text.replace(/\*/g, '');
+}
+
 export interface ButtonRectLayout {
   height: number;
   width: number;

@@ -16,6 +16,7 @@ import {
 import type { RunState, ShopItem } from '../types/game';
 import { APP_WIDTH, APP_HEIGHT, COLORS } from '../game/constants';
 import { destroySceneChildren } from '../ui/sceneCleanup';
+import { pathimonSpriteAssets } from '../ui/battleUi';
 import { addBoxLabel, addLabel, drawPanel } from '../ui/draw';
 import { keyboardCommand } from '../ui/keyboard';
 
@@ -53,6 +54,12 @@ export class ShopScene extends Phaser.Scene {
 
   preload(): void {
     shopItemAssetPaths().forEach((path) => {
+      if (!this.textures.exists(path)) {
+        this.load.image(path, path);
+      }
+    });
+    this.state.party.forEach((monster) => {
+      const path = pathimonSpriteAssets(monster, this.state.visualStyle).front;
       if (!this.textures.exists(path)) {
         this.load.image(path, path);
       }
@@ -194,7 +201,8 @@ export class ShopScene extends Phaser.Scene {
       const hpText = `HP ${monster.hp}/${monster.maxHp}`;
 
       drawPanel(this, 246, y, 520, 36).setAlpha(enabled ? 0.95 : 0.45);
-      addBoxLabel(this, 266, y + 8, monster.name, { width: 180, height: 18, size: 14, minSize: 10, maxLines: 1 })
+      this.drawPartyThumbnail(monster, 266, y + 18, enabled ? 1 : 0.4);
+      addBoxLabel(this, 288, y + 8, monster.name, { width: 158, height: 18, size: 14, minSize: 10, maxLines: 1 })
         .setAlpha(enabled ? 1 : 0.48);
       addLabel(this, 452, y + 9, hpText, 13).setAlpha(enabled ? 0.9 : 0.45);
       this.createButton(616, y + 5, 128, 26, action, () => {
@@ -210,6 +218,15 @@ export class ShopScene extends Phaser.Scene {
       this.note = '선택을 취소했습니다.';
       this.render();
     });
+  }
+
+  private drawPartyThumbnail(monster: RunState['party'][number], x: number, y: number, alpha: number): void {
+    const path = pathimonSpriteAssets(monster, this.state.visualStyle).front;
+    if (this.textures.exists(path)) {
+      this.add.image(x, y, path).setDisplaySize(30, 30).setAlpha(alpha);
+      return;
+    }
+    addLabel(this, x, y, monster.glyph, 18).setOrigin(0.5).setAlpha(alpha);
   }
 
   private canUseTargetedItem(item: ShopItem, partyIndex: number): boolean {

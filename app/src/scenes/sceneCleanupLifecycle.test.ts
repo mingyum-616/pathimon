@@ -51,4 +51,24 @@ describe('scene cleanup lifecycle wiring', () => {
     expect(shopSceneSource).toContain("command === 'confirm'");
     expect(shopSceneSource).toContain('this.keyboardButtons[this.keyboardCursor]');
   });
+
+  it('paginates floor-clear learning text without skipping pages', () => {
+    expect(battleSceneSource).toContain('paginateWrappedTextLines');
+    expect(battleSceneSource).toContain('getWrappedText');
+    expect(battleSceneSource).toContain('floorClearPage');
+    expect(battleSceneSource).toContain('advanceFloorClearPage');
+    expect(battleSceneSource).toContain('다음 내용');
+  });
+
+  it('labels enemy treatments as effective against the active pathimon', () => {
+    expect(battleSceneSource).toContain("'효과 기술'");
+    expect(battleSceneSource).toContain('현재 선출: ${player.name}에게 효과적인 적의 처치');
+  });
+
+  it('loads and draws party thumbnails in targeted shop item lists', () => {
+    expect(shopSceneSource).toContain("import { pathimonSpriteAssets } from '../ui/battleUi';");
+    expect(shopSceneSource).toMatch(/preload\(\): void \{[\s\S]*?this\.state\.party\.forEach/);
+    expect(shopSceneSource).toContain('drawPartyThumbnail');
+    expect(shopSceneSource).toContain('pathimonSpriteAssets(monster, this.state.visualStyle).front');
+  });
 });
