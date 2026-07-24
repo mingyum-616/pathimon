@@ -320,6 +320,21 @@ describe('run state loop', () => {
     expect(result.phase).toBe('floorClear');
     expect(result.lastLog).toContain(`${battle.floor}층 클리어`);
     expect(result.lastLog).not.toContain('학습 피드백');
+    expect(result.lastLog).toContain('다음 층 시작 전 전원 회복');
+    expect(result.lastLog).toContain('파티 1/6');
+  });
+
+  it('shows the challenge victory reward and current party diversity in maintenance', () => {
+    const battle = enterBattle({ ...createInitialRunState('challenge'), floor: 5 });
+    if (!battle.enemy) throw new Error('enemy missing');
+    battle.enemy.hp = 1;
+
+    const result = resolvePlayerMove(battle, 'cholera_toxin', 1);
+
+    expect(result.phase).toBe('shop');
+    expect(result.lastLog).toContain('승리 보상 +5원');
+    expect(result.lastLog).toContain('파티 1/6');
+    expect(result.lastLog).toContain('계열 1종');
   });
 
   it('captures a normal enemy and shows the floor and pathimon memo instead of learning feedback', () => {
@@ -413,6 +428,17 @@ describe('run state loop', () => {
     expect(result.capsules).toBe(0);
     expect(result.capsuleInventory.universal).toBe(0);
     expect(result.party.length).toBe(2);
+  });
+
+  it('shows one concise pathimon fact after a learning-mode wild encounter', () => {
+    const battle = enterBattle(createInitialRunState('learning'));
+    if (!battle.enemy) throw new Error('enemy missing');
+
+    const result = resolvePassEncounter(battle);
+    const displayedLearningPoints = battle.enemy.profileMemo
+      ?.filter((line) => result.lastLog.includes(line)) ?? [];
+
+    expect(displayedLearningPoints).toHaveLength(1);
   });
 
   it('uses pathogen-specific learning feedback instead of the generic type-matchup sentence', () => {

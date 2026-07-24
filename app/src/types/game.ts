@@ -265,6 +265,7 @@ export interface TrainerData {
 export interface ActiveEffect {
   kind: EffectPrimitive['kind'] | 'confusion';
   stat?: 'attack' | 'defense';
+  status?: 'confusion' | 'stun';
   pct?: number;
   rank?: number;
   side?: 'incoming';

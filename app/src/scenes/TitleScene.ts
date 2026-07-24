@@ -22,11 +22,33 @@ export class TitleScene extends Phaser.Scene {
 
   preload(): void {
     const content = this.getContent();
-    [...content.pathimonSprites, ...content.bossSprites].forEach((path) => {
-      if (!this.textures.exists(path)) {
-        this.load.image(path, path);
-      }
+    const pendingPaths = [...new Set([...content.pathimonSprites, ...content.bossSprites])]
+      .filter((path) => !this.textures.exists(path));
+    if (pendingPaths.length === 0) return;
+
+    const loadingLayer = [
+      this.add.rectangle(0, 0, APP_WIDTH, APP_HEIGHT, 0x111722).setOrigin(0).setDepth(1000),
+      addLabel(this, APP_WIDTH / 2, APP_HEIGHT / 2 - 22, '패시몬을 불러오는 중', 20)
+        .setOrigin(0.5)
+        .setDepth(1001),
+      this.add.rectangle(APP_WIDTH / 2, APP_HEIGHT / 2 + 20, 320, 12, 0x2f2840)
+        .setOrigin(0.5)
+        .setDepth(1001),
+    ];
+    const progressBar = this.add.rectangle(APP_WIDTH / 2 - 160, APP_HEIGHT / 2 + 20, 0, 8, 0x72d6ff)
+      .setOrigin(0, 0.5)
+      .setDepth(1002);
+    loadingLayer.push(progressBar);
+
+    const updateProgress = (progress: number) => {
+      progressBar.width = 320 * progress;
+    };
+    this.load.on('progress', updateProgress);
+    this.load.once('complete', () => {
+      this.load.off('progress', updateProgress);
+      loadingLayer.forEach((object) => object.destroy());
     });
+    pendingPaths.forEach((path) => this.load.image(path, path));
   }
 
   create(): void {

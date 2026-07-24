@@ -15,7 +15,11 @@ import { TAG_LABELS } from '../data/labels';
 import { MOVES } from '../data/moves';
 import { MONSTERS } from '../data/monsters';
 import { interpolatePathimonName } from '../game/text';
-import { contextualLearningPoint, randomLearningPoint } from '../game/learning';
+import {
+  conciseLearningFeedback,
+  contextualLearningPoint,
+  randomLearningPoint,
+} from '../game/learning';
 import { createMonsterInstance } from '../state/factory';
 import { bossMoveEffectiveness, chooseBossMove, chooseEffectiveBossMove, createBossDefenseProfile } from './bossMatchup';
 import { advanceStagedMove, currentMoveData, resolveMoveOutcome } from './moveStages';
@@ -126,7 +130,8 @@ function formatBattleActionLog(
 ): string {
   const lines = [actorLog.trim(), enemyLog.trim()].filter((line) => line.length > 0);
   if (state.mode === 'learning' && learningText?.trim()) {
-    lines.push(`학습 피드백: ${learningText.trim()}`);
+    const feedback = conciseLearningFeedback(learningText);
+    if (feedback) lines.push(`학습 피드백: ${feedback}`);
   }
   return lines.join('\n\n');
 }
@@ -144,22 +149,31 @@ function clearBattleOnlyState(monster: RuntimeMonster): RuntimeMonster {
   };
 }
 
-function maintenanceVictoryLog(state: RunState): string {
-  if (state.encounterKind === 'boss') {
-    return '보스 전투에서 승리했습니다. 정비 구역에 도착했습니다.';
-  }
-
-  return '사람 전투에서 승리했습니다. 정비 구역에 도착했습니다.';
+function partyProgressText(state: RunState): string {
+  const categoryCount = new Set(state.party.map((monster) => monster.category)).size;
+  return `파티 ${state.party.length}/${MAX_PARTY_SIZE} · 계열 ${categoryCount}종`;
 }
 
-function pathimonMemoDetail(monster: RuntimeMonster, extraForLearning = false): string {
-  const first = randomLearningPoint(monster) || `${monster.scientificName}은 ${monster.category} 타입입니다.`;
-  if (!extraForLearning) return first;
+function victoryProgressDetail(state: RunState, reward: number): string {
+  if (state.mode === 'learning') {
+    return `학습모드 보상: 다음 층 시작 전 전원 회복 · ${partyProgressText(state)}`;
+  }
 
-  // 학습모드: 포획·통과 시 서로 다른 두 번째 학습포인트를 하나 더 보여준다.
-  const others = (monster.profileMemo ?? []).filter((line) => line.trim().length > 0 && line !== first);
-  const second = others.length > 0 ? randomLearningPoint({ profileMemo: others }) : '';
-  return second ? `${first}\n${second}` : first;
+  return `승리 보상 +${reward}원 · ${partyProgressText(state)}`;
+}
+
+function maintenanceVictoryLog(state: RunState, reward: number): string {
+  const detail = victoryProgressDetail(state, reward);
+  if (state.encounterKind === 'boss') {
+    return `보스 전투에서 승리했습니다. 정비 구역에 도착했습니다.\n${detail}`;
+  }
+
+  return `사람 전투에서 승리했습니다. 정비 구역에 도착했습니다.\n${detail}`;
+}
+
+function pathimonMemoDetail(monster: RuntimeMonster): string {
+  const memo = randomLearningPoint(monster) || `${monster.scientificName}은 ${monster.category} 타입입니다.`;
+  return memo.trim();
 }
 
 function floorClearLog(state: RunState, message: string, detail?: string): string {
@@ -169,14 +183,17 @@ function floorClearLog(state: RunState, message: string, detail?: string): strin
 function setWinState(state: RunState, message: string, _learningDetail?: string, resultDetail?: string): RunState {
   const shouldOpenShop = state.mode === 'challenge' && (state.encounterKind === 'trainer' || state.encounterKind === 'boss');
   const reward = shouldOpenShop ? WIN_REWARD : 0;
-  const battleResultLog = floorClearLog(state, message, resultDetail);
+  const detail = resultDetail
+    ? `${resultDetail}\n${partyProgressText(state)}`
+    : victoryProgressDetail(state, reward);
+  const battleResultLog = floorClearLog(state, message, detail);
 
   return {
     ...state,
     money: state.money + reward,
     party: state.party.map(clearBattleOnlyState),
     phase: shouldOpenShop ? 'shop' : 'floorClear',
-    lastLog: shouldOpenShop ? maintenanceVictoryLog(state) : battleResultLog,
+    lastLog: shouldOpenShop ? maintenanceVictoryLog(state, reward) : battleResultLog,
     battleResultLog,
     shopInventory: shouldOpenShop ? createMaintenanceInventory(state.floor) : undefined,
     shopRefreshCount: shouldOpenShop ? 0 : undefined,
@@ -380,6 +397,18 @@ function planHumanMoves(
 function clearPlannedHumanMoves(enemy: RuntimeMonster): void {
   enemy.plannedMoveId = undefined;
   enemy.plannedMoveIds = [];
+}
+
+function announcedTreatmentMultiplier(enemy: RuntimeMonster, defender: RuntimeMonster): number {
+  const plannedMoveIds = enemy.plannedMoveIds?.length
+    ? enemy.plannedMoveIds
+    : [enemy.plannedMoveId].filter((moveId): moveId is MoveId => Boolean(moveId));
+
+  return plannedMoveIds.reduce((highest, moveId) => {
+    const move = MOVES[moveId];
+    if (!move) return highest;
+    return Math.max(highest, bossMoveEffectiveness(move, createBossDefenseProfile(defender)).multiplier);
+  }, 1);
 }
 
 function resolveHumanMove(
@@ -662,7 +691,7 @@ export function resolvePassEncounter(state: RunState): RunState {
   nextState.lastLog = floorClearLog(
     nextState,
     `${enemy.name}와 거리를 두고 지나갔다.`,
-    pathimonMemoDetail(enemy, nextState.mode === 'learning'),
+    pathimonMemoDetail(enemy),
   );
   return nextState;
 }
@@ -704,6 +733,13 @@ export function resolveSwitchMonster(
     return nextState;
   }
 
+  const previousActor = nextState.party[nextState.activeIndex];
+  const previousMultiplier = isHumanEnemy(enemy) && previousActor
+    ? announcedTreatmentMultiplier(enemy, previousActor)
+    : 1;
+  const targetMultiplier = isHumanEnemy(enemy)
+    ? announcedTreatmentMultiplier(enemy, target)
+    : 1;
   nextState.activeIndex = targetIndex;
   if (nextState.encounterKind === 'wild') {
     nextState.phase = 'battle';
@@ -711,13 +747,16 @@ export function resolveSwitchMonster(
     return nextState;
   }
 
-  if (isHumanEnemy(enemy)) {
+  if (isHumanEnemy(enemy) && !enemy.plannedMoveIds?.length && !enemy.plannedMoveId) {
     const currentActor = state.party[state.activeIndex];
     if (currentActor) planHumanMoves(enemy, currentActor, state.party, state.activeIndex);
   }
 
   const enemyLog = resolveEnemyTurn(target, enemy, variance, nextState.party, targetIndex, criticalRandom);
-  return finishBattleRound(nextState, target, enemy, `${target.name} switched in.`, enemyLog, defaultLearningDetail(nextState));
+  const switchLog = previousMultiplier > targetMultiplier
+    ? `${target.name}이 나왔다.\n교체 성공: 예상 피해 ×${previousMultiplier} → ×${targetMultiplier}로 감소!`
+    : `${target.name}이 나왔다.`;
+  return finishBattleRound(nextState, target, enemy, switchLog, enemyLog, defaultLearningDetail(nextState));
 }
 
 export function resolveCapsuleAction(state: RunState, rollOrCapsule: number | CapsuleId, maybeRoll?: number): RunState {
@@ -774,7 +813,7 @@ export function resolveCapsuleAction(state: RunState, rollOrCapsule: number | Ca
     }
 
     nextState.party.push(captured);
-    return setWinState(nextState, `${enemy.name}을 포획했습니다.`, undefined, pathimonMemoDetail(enemy, nextState.mode === 'learning'));
+    return setWinState(nextState, `${enemy.name}을 포획했습니다.`, undefined, pathimonMemoDetail(enemy));
   }
 
   nextState.phase = 'battle';

@@ -14,8 +14,8 @@ import {
 import { currentMoveData, currentMoveName } from '../battle/moveStages';
 import { bossMoveEffectiveness, createBossDefenseProfile } from '../battle/bossMatchup';
 import { interpolatePathimonName } from '../game/text';
-import { randomLearningPoint } from '../game/learning';
-import type { AbilityId, CapsuleId, EffectPrimitive, EncounterKind, MoveData, MoveId, MoveSlot, RunMode, RuntimeMonster, TagValue, VisualStyle } from '../types/game';
+import { randomLearningPoint, sanitizeLearningText } from '../game/learning';
+import type { AbilityId, CapsuleId, EffectPrimitive, EncounterKind, MonsterData, MoveData, MoveId, MoveSlot, RunMode, RuntimeMonster, TagValue, VisualStyle } from '../types/game';
 
 export type BattleActionId = 'fight' | 'pass' | 'capsule' | 'dex' | 'party';
 export type PartyMenuPurpose = 'switch' | 'forced' | 'release';
@@ -318,15 +318,19 @@ export function pokerogueAtlasJsonPath(pngPath: string): string {
   return pngPath.replace(/\.png$/, '.json');
 }
 
-export function pathimonSpriteAssets(monster: RuntimeMonster, visualStyle: VisualStyle = 'character'): BattleMonsterAssets {
-  if (monster.assetPath) {
+type PathimonSpriteSource =
+  | Pick<RuntimeMonster, 'assetBaseId' | 'assetPath' | 'templateId'>
+  | Pick<MonsterData, 'assetBaseId' | 'id'>;
+
+export function pathimonSpriteAssets(monster: PathimonSpriteSource, visualStyle: VisualStyle = 'character'): BattleMonsterAssets {
+  if ('assetPath' in monster && monster.assetPath) {
     return {
       front: monster.assetPath,
       back: monster.assetPath,
     };
   }
 
-  const assetId = monster.assetBaseId ?? monster.templateId;
+  const assetId = monster.assetBaseId ?? ('templateId' in monster ? monster.templateId : monster.id);
   if (visualStyle === 'micro') {
     const front = `images/pathimon/${assetId}-micro-front.png`;
     return {
@@ -373,6 +377,43 @@ export function paginateWrappedTextLines(lines: string[], maxLines: number): str
     pages.push(lines.slice(index, index + pageSize).join('\n'));
   }
 
+  return pages.length > 0 ? pages : [''];
+}
+
+export function paginateWrappedTextBlocks(blocks: string[][], maxLines: number): string[] {
+  const pageSize = Math.max(1, Math.floor(maxLines));
+  const pages: string[] = [];
+  let current: string[] = [];
+
+  const flush = () => {
+    if (current.length === 0) return;
+    pages.push(current.join('\n'));
+    current = [];
+  };
+
+  blocks.filter((block) => block.length > 0).forEach((block) => {
+    if (block.length <= pageSize) {
+      if (current.length + block.length > pageSize) flush();
+      current.push(...block);
+      return;
+    }
+
+    flush();
+    const pageCount = Math.ceil(block.length / pageSize);
+    const baseSize = Math.floor(block.length / pageCount);
+    let remainder = block.length % pageCount;
+    let offset = 0;
+    for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+      const chunkSize = baseSize + (remainder > 0 ? 1 : 0);
+      remainder = Math.max(0, remainder - 1);
+      const chunk = block.slice(offset, offset + chunkSize);
+      offset += chunkSize;
+      if (pageIndex > 0 && chunk[0]) chunk[0] = `(계속) ${chunk[0]}`;
+      pages.push(chunk.join('\n'));
+    }
+  });
+
+  flush();
   return pages.length > 0 ? pages : [''];
 }
 
@@ -714,10 +755,12 @@ export function commandViewLines(
   encounterKind: EncounterKind,
   notice: string,
   helperText: string,
+  onboardingText = '',
 ): string[] {
   const lines = [`${player.name}은 무엇을 할까?`];
   if (encounterKind === 'wild') {
     lines.push(notice || helperText);
+    if (onboardingText && onboardingText !== notice) lines.push(onboardingText);
   } else {
     lines.push(enemyIntentText(enemy));
   }
@@ -861,7 +904,7 @@ export function formatMoveDetails(
     `효과: ${parts.effect}`,
     `상태이상: ${parts.conditions}`,
     `기술 설명: ${interpolateMoveText(move.description, monster)}`,
-    `학습: ${interpolateMoveText(learnText, monster)}`,
+    `학습: ${sanitizeLearningText(interpolateMoveText(learnText, monster))}`,
   ];
 }
 
@@ -916,8 +959,8 @@ export function formatMoveDetailSections(
     accuracy: `명중률: ${Math.round(move.accuracy * 100)}%`,
     effect: `효과: ${parts.effect}`,
     conditions: `상태이상: ${parts.conditions}`,
-    description: `기술 설명: ${interpolateMoveText(move.description, monster)}`,
-    learnText: `학습: ${interpolateMoveText(learnText, monster)}`,
+    description: `기술 설명: ${sanitizeLearningText(interpolateMoveText(move.description, monster))}`,
+    learnText: `학습: ${sanitizeLearningText(interpolateMoveText(learnText, monster))}`,
     outcomeRows: moveOutcomeRows(move, monster),
   };
 }
@@ -1030,7 +1073,8 @@ export function effectLabels(monster: RuntimeMonster): string[] {
     else if (effect.kind === 'invuln') otherTimedLabels.push(effect.turns ? `무적 ${effect.turns}턴` : '무적');
     else if (effect.kind === 'dot') otherTimedLabels.push('지속피해');
     else if (effect.kind === 'convert') otherTimedLabels.push('개종');
-    else otherTimedLabels.push(effect.kind);
+    else if (effect.kind === 'status') otherTimedLabels.push(effect.status === 'confusion' ? '혼란' : '마비');
+    else if (effect.kind === 'empower_status') otherTimedLabels.push(`다음 공격 상태이상 ${effect.multiplier}배`);
   });
 
   const rankLabels: string[] = [];

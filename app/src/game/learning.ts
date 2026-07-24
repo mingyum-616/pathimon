@@ -1,5 +1,22 @@
 import type { MoveId, RuntimeMonster } from '../types/game';
 
+export function sanitizeLearningText(text: string): string {
+  return text.replace(/\*/g, '').replace(/\s+/g, ' ').trim();
+}
+
+export function conciseLearningFeedback(text: string, maxLength = 140): string {
+  const sanitized = sanitizeLearningText(text);
+  if (!sanitized) return '';
+
+  const firstSentence = sanitized.split(/(?<=[.!?])\s+(?=[가-힣A-Z0-9])/)[0] ?? sanitized;
+  if (firstSentence.length <= maxLength) return firstSentence;
+
+  const clipped = firstSentence.slice(0, Math.max(1, maxLength - 1));
+  const lastSpace = clipped.lastIndexOf(' ');
+  const boundary = lastSpace >= Math.floor(maxLength * 0.6) ? lastSpace : clipped.length;
+  return `${clipped.slice(0, boundary).trimEnd()}…`;
+}
+
 export function randomLearningPoint(
   monster: Pick<RuntimeMonster, 'profileMemo'> | undefined,
   random: () => number = Math.random,

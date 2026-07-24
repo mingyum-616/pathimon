@@ -20,6 +20,13 @@ describe('ModeSelectScene copy', () => {
     expect(modeSelectSceneSource).toContain('this.optionCursor');
   });
 
+  it('keeps both choices visible until the player confirms the start button', () => {
+    expect(modeSelectSceneSource).toContain('private startRun(): void');
+    expect(modeSelectSceneSource).toContain("'게임 시작'");
+    expect(modeSelectSceneSource).toContain("'선택됨'");
+    expect(modeSelectSceneSource).not.toContain("this.time.delayedCall(120, () => this.scene.start('StarterSelectScene'");
+  });
+
   it('aligns the visual-style controls with the run-mode cards', () => {
     expect(modeSelectSceneSource).toContain('private createModeButton');
     expect(modeSelectSceneSource).toContain('private createStyleButton');

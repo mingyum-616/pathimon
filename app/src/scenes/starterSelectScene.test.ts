@@ -18,4 +18,11 @@ describe('StarterSelectScene audio', () => {
       'this.startCursor = canStartWithStarterSelection(this.selectedIds);',
     );
   });
+
+  it('loads and reveals every starter candidate sprite above its capsule', () => {
+    expect(starterSelectSceneSource).toContain('pathimonSpriteAssets');
+    expect(starterSelectSceneSource).toContain('this.candidates.forEach');
+    expect(starterSelectSceneSource).toContain('const spriteAssets = pathimonSpriteAssets(monster, this.visualStyle);');
+    expect(starterSelectSceneSource).toContain('.setDisplaySize(active ? 106 : 96, active ? 106 : 96)');
+  });
 });

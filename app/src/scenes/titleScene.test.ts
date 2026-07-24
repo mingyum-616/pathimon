@@ -26,4 +26,10 @@ describe('TitleScene rendering', () => {
     expect(titleSceneSource).toContain('const display = titleCharacterDisplaySize(image.width, image.height, placement.size);');
     expect(titleSceneSource).toContain('.setDisplaySize(display.width, display.height)');
   });
+
+  it('shows loading progress while title assets are still being prepared', () => {
+    expect(titleSceneSource).toContain("'패시몬을 불러오는 중'");
+    expect(titleSceneSource).toContain("this.load.on('progress'");
+    expect(titleSceneSource).toContain("this.load.once('complete'");
+  });
 });

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { RuntimeMonster } from '../types/game';
-import { contextualLearningPoint, leftoverLearningPoints, randomLearningPoint } from './learning';
+import {
+  conciseLearningFeedback,
+  contextualLearningPoint,
+  leftoverLearningPoints,
+  randomLearningPoint,
+  sanitizeLearningText,
+} from './learning';
 
 function monsterWithLearningPoints(points?: string[]): RuntimeMonster {
   return {
@@ -73,5 +79,21 @@ describe('learning points', () => {
     monster.movePointMap = { atk: [1, 2] };
 
     expect(leftoverLearningPoints(monster)).toEqual(['L1 [감별점] 포인트 A', 'L4 [역학] 포인트 D']);
+  });
+
+  it('removes note markup and keeps combat feedback to one concise sentence', () => {
+    const text = 'L4 [기전] **장열**을 일으킨다. 두 번째 문장은 도감에서 확인한다.';
+
+    expect(sanitizeLearningText(text)).toBe('L4 [기전] 장열을 일으킨다. 두 번째 문장은 도감에서 확인한다.');
+    expect(conciseLearningFeedback(text)).toBe('L4 [기전] 장열을 일으킨다.');
+  });
+
+  it('shortens a single very long sentence at a word boundary', () => {
+    const text = `L7 [생활사] ${'감염 경로를 따라 이동한다 '.repeat(12).trim()}.`;
+    const feedback = conciseLearningFeedback(text, 70);
+
+    expect(feedback.length).toBeLessThanOrEqual(71);
+    expect(feedback.endsWith('…')).toBe(true);
+    expect(feedback).not.toContain('**');
   });
 });

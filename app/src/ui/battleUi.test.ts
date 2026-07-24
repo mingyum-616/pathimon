@@ -38,6 +38,7 @@ import {
   lockedMoveOverlayPath,
   mobileHomeButtonLayout,
   normalizedSpriteScale,
+  paginateWrappedTextBlocks,
   paginateWrappedTextLines,
   pathimonTypeIconAssetPaths,
   pathimonSpriteAssets,
@@ -460,6 +461,24 @@ describe('battle UI helpers', () => {
     ]);
   });
 
+  it('adds the first wild encounter hint without hiding the encounter message', () => {
+    const player = createMonster({ name: '플루리온' });
+    const enemy = createMonster({ name: '결핵잠', moveset: ['tb_chronic'] });
+
+    expect(commandViewLines(
+      player,
+      enemy,
+      'wild',
+      '결핵잠이 나타났다.',
+      '도움말',
+      '야생 조우에서는 캡슐로 포획하거나 지나갈 수 있습니다.',
+    )).toEqual([
+      '플루리온은 무엇을 할까?',
+      '결핵잠이 나타났다.',
+      '야생 조우에서는 캡슐로 포획하거나 지나갈 수 있습니다.',
+    ]);
+  });
+
   it('places the hp percent label to the right of the hp bar', () => {
     const panel = battleUnitPanelLayouts().player;
     const layout = battleHpBarLayout(panel);
@@ -488,6 +507,32 @@ describe('battle UI helpers', () => {
       '개종',
     ]);
     expect(statusSummary(monster)).toBe('상태: 공격 +1, 피해감소, 무적 3턴, 지속피해, 개종');
+  });
+
+  it('uses player-facing labels for temporary preparation effects', () => {
+    const monster = createMonster({
+      effects: [{ kind: 'empower_status', multiplier: 2, turns: 99 }],
+    });
+
+    expect(effectLabels(monster)).toContain('다음 공격 상태이상 2배');
+    expect(effectLabels(monster)).not.toContain('empower_status');
+  });
+
+  it('keeps learning blocks together and balances an oversized block', () => {
+    expect(paginateWrappedTextBlocks([
+      ['포획에 성공했습니다.'],
+      ['L1 첫째 줄', '둘째 줄', '셋째 줄', '넷째 줄'],
+    ], 4)).toEqual([
+      '포획에 성공했습니다.',
+      'L1 첫째 줄\n둘째 줄\n셋째 줄\n넷째 줄',
+    ]);
+
+    expect(paginateWrappedTextBlocks([
+      ['L5 첫째 줄', '둘째 줄', '셋째 줄', '넷째 줄', '다섯째 줄', '여섯째 줄'],
+    ], 4)).toEqual([
+      'L5 첫째 줄\n둘째 줄\n셋째 줄',
+      '(계속) 넷째 줄\n다섯째 줄\n여섯째 줄',
+    ]);
   });
 
   it('combines repeated rank effects into one status label', () => {

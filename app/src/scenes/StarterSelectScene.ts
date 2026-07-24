@@ -5,7 +5,7 @@ import { APP_HEIGHT, APP_WIDTH, COLORS } from '../game/constants';
 import { createInitialRunState, enterBattle } from '../state/runState';
 import type { MonsterData, RunMode, VisualStyle } from '../types/game';
 import { addLabel, drawPanel } from '../ui/draw';
-import { capsuleIconPath } from '../ui/battleUi';
+import { capsuleIconPath, pathimonSpriteAssets } from '../ui/battleUi';
 import {
   MAX_STARTER_SELECTIONS,
   addStarterSelection,
@@ -56,6 +56,9 @@ export class StarterSelectScene extends Phaser.Scene {
   preload(): void {
     queueIntroBgm(this);
     this.queueImage(capsuleIconPath('universal'));
+    this.candidates.forEach((monster) => {
+      this.queueImage(pathimonSpriteAssets(monster, this.visualStyle).front);
+    });
   }
 
   create(): void {
@@ -114,18 +117,24 @@ export class StarterSelectScene extends Phaser.Scene {
   private drawCapsuleSlots(): void {
     const capsulePath = capsuleIconPath('universal');
     starterCapsuleSlots().forEach((slot, index) => {
+      const monster = this.candidates[index];
+      if (!monster) return;
       const active = !this.startCursor && this.slotCursor === index;
       if (active) {
         this.drawCursorMarker(slot.x, slot.markerY);
       }
 
-      const shadow = this.add.ellipse(slot.x, slot.y + 42, 104, 28, 0x12070b, 0.36);
+      const spriteAssets = pathimonSpriteAssets(monster, this.visualStyle);
+      const shadow = this.add.ellipse(slot.x, slot.y + 76, 104, 24, 0x12070b, 0.36);
       shadow.setStrokeStyle(2, active ? ACTIVE_LINE : 0x4a2a2a, active ? 0.75 : 0.22);
-      this.add.image(slot.x, slot.y, capsulePath)
+      this.add.image(slot.x, slot.y + 4, spriteAssets.front)
         .setOrigin(0.5)
-        .setDisplaySize(active ? 102 : 92, active ? 102 : 92);
+        .setDisplaySize(active ? 106 : 96, active ? 106 : 96);
+      this.add.image(slot.x, slot.y + 78, capsulePath)
+        .setOrigin(0.5)
+        .setDisplaySize(active ? 58 : 52, active ? 58 : 52);
 
-      const hit = this.add.rectangle(slot.x - 62, slot.y - 62, 124, 132, 0xffffff, 0.001).setOrigin(0);
+      const hit = this.add.rectangle(slot.x - 62, slot.y - 58, 124, 158, 0xffffff, 0.001).setOrigin(0);
       hit.setInteractive({ useHandCursor: true });
       hit.on('pointerdown', () => {
         this.slotCursor = index;

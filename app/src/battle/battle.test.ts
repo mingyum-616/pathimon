@@ -911,6 +911,45 @@ describe('battle engine', () => {
     expect(result.lastLog).not.toContain('효과가 굉장했다');
   });
 
+  it('reports a successful switch when the announced treatment multiplier drops', () => {
+    const battle = createBattleState({
+      party: [
+        createMonster({
+          name: '표적몬',
+          hp: 100,
+          maxHp: 100,
+          countermeasures: { direct: ['알벤다졸'], symptomTags: [] },
+        }),
+        createMonster({
+          name: '회피몬',
+          hp: 100,
+          maxHp: 100,
+          countermeasures: { direct: [], symptomTags: [] },
+        }),
+      ],
+      enemy: createMonster({
+        name: '면역챔피언',
+        category: '보스 사람',
+        moveset: ['m_rx_알벤다졸', 'm_interferon'],
+        moveSlots: ['m_rx_알벤다졸', 'm_interferon', null, null],
+        plannedMoveId: 'm_rx_알벤다졸',
+        plannedMoveIds: ['m_rx_알벤다졸'],
+        isBoss: true,
+        isTrainer: true,
+        attack: 1,
+        hp: 999,
+        maxHp: 999,
+      }),
+    });
+
+    const result = resolveSwitchMonster(battle, 1, 1);
+
+    expect(result.battleActionLog).toContain('교체 성공: 예상 피해 ×4 → ×1');
+    expect(result.battleActionLog).toContain('회피몬');
+    expect(result.battleActionLog).toContain(`면역챔피언의 ${MOVES['m_rx_알벤다졸'].name}!`);
+    expect(result.battleActionLog).not.toContain(`면역챔피언의 ${MOVES.m_interferon.name}!`);
+  });
+
   it('uses two telegraphed boss moves in phase two and both hit the final active pathimon', () => {
     const battle = createBattleState({
       party: [

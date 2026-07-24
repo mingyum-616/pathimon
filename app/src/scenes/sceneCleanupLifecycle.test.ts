@@ -53,7 +53,7 @@ describe('scene cleanup lifecycle wiring', () => {
   });
 
   it('paginates floor-clear learning text without skipping pages', () => {
-    expect(battleSceneSource).toContain('paginateWrappedTextLines');
+    expect(battleSceneSource).toContain('paginateWrappedTextBlocks');
     expect(battleSceneSource).toContain('getWrappedText');
     expect(battleSceneSource).toContain('floorClearPage');
     expect(battleSceneSource).toContain('advanceFloorClearPage');

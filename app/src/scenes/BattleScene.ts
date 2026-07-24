@@ -50,7 +50,7 @@ import {
   mobileControlOverlayInteractive,
   mobileHomeButtonLayout,
   normalizedSpriteScale,
-  paginateWrappedTextLines,
+  paginateWrappedTextBlocks,
   partyMenuOptions,
   pathimonTypeBorderColor,
   pathimonTypeIconAssetPaths,
@@ -627,6 +627,9 @@ export class BattleScene extends Phaser.Scene {
       this.state.encounterKind,
       this.notice,
       helperText,
+      this.state.floor === 1 && this.state.encounterKind === 'wild'
+        ? '야생 조우: 계열에 맞는 캡슐로 포획하거나 지나갈 수 있습니다.'
+        : '',
     ).forEach((line, index) => {
       const fontSize = index === 0 ? 24 : index === 1 ? 17 : 15;
       addBoxLabel(this, index === 0 ? 34 : 36, 410 + index * 40, line, {
@@ -1426,7 +1429,9 @@ export class BattleScene extends Phaser.Scene {
       ? `${this.state.pendingCapture?.name ?? '새 패시몬'}을 데려가려면 놓아줄 패시몬을 선택하세요.`
       : purpose === 'forced'
         ? '다음에 내보낼 패시몬을 선택하세요.'
-        : '패시몬을 어떻게 하겠습니까?';
+        : this.state.floor === 5 && this.state.enemy?.isTrainer
+          ? '예고된 처치의 피해 배율이 낮은 패시몬으로 교체하세요.'
+          : '패시몬을 어떻게 하겠습니까?';
 
     addLabel(this, 28, 22, purpose === 'release' ? '포획 교체' : '패시몬', 34);
     this.drawFloorBadge();
@@ -2024,9 +2029,9 @@ export class BattleScene extends Phaser.Scene {
     addBoxLabel(this, 34, 448, pages[pageIndex], {
       width: 690,
       height: 82,
-      size: 15,
-      minSize: 10,
-      maxLines: 4,
+      size: 14,
+      minSize: 9,
+      maxLines: 5,
     }).setAlpha(0.9);
     const hasNextPage = pageIndex < pages.length - 1;
     const buttonLabel = hasNextPage ? `다음 내용 ${pageIndex + 2}/${pages.length}` : '다음 층';
@@ -2041,10 +2046,17 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private floorClearPages(body = this.floorClearBody()): string[] {
-    const measure = addLabel(this, -10000, -10000, body, 15).setWordWrapWidth(690, true);
-    const wrappedLines = measure.getWrappedText(body);
-    measure.destroy();
-    return paginateWrappedTextLines(wrappedLines, 4);
+    const blocks = body
+      .split(/\n+/)
+      .map((paragraph) => paragraph.trim())
+      .filter((paragraph) => paragraph.length > 0)
+      .map((paragraph) => {
+        const measure = addLabel(this, -10000, -10000, paragraph, 14).setWordWrapWidth(690, true);
+        const wrappedLines = measure.getWrappedText(paragraph);
+        measure.destroy();
+        return wrappedLines;
+      });
+    return paginateWrappedTextBlocks(blocks, 5);
   }
 
   private advanceFloorClearPage(): void {

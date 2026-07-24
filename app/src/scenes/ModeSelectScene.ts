@@ -23,6 +23,7 @@ const STYLE_BUTTON_HEIGHT = 54;
 export class ModeSelectScene extends Phaser.Scene {
   private choice: ModeSelectChoice = {};
   private optionCursor = 0;
+  private startCursor = false;
   private starting = false;
 
   constructor() {
@@ -36,6 +37,7 @@ export class ModeSelectScene extends Phaser.Scene {
   create(): void {
     this.choice = {};
     this.optionCursor = 0;
+    this.startCursor = false;
     this.starting = false;
     playIntroBgm(this);
     this.input.keyboard?.on('keydown', this.handleKeyboardDown);
@@ -64,17 +66,7 @@ export class ModeSelectScene extends Phaser.Scene {
     options.slice(2).forEach((option, index) => {
       this.createStyleButton(142 + index * 390, 402, option, index + 2);
     });
-
-    if (shouldStartRun(this.choice)) {
-      const modeLabel = this.choice.mode === 'learning' ? '학습모드' : '도전모드';
-      const styleLabel = this.choice.visualStyle === 'character' ? '캐릭터풍' : '실사풍';
-      this.add.rectangle(340, 468, 344, 34, 0x181522, 0.96)
-        .setOrigin(0)
-        .setStrokeStyle(1, ACTIVE_LINE, 0.72);
-      addLabel(this, 512, 476, `${modeLabel}  ·  ${styleLabel}`, 14)
-        .setOrigin(0.5, 0)
-        .setColor('#dff7ff');
-    }
+    this.createStartButton();
   }
 
   private createModeButton(
@@ -91,7 +83,7 @@ export class ModeSelectScene extends Phaser.Scene {
       MODE_BUTTON_HEIGHT,
       selected ? SELECTED_FILL : COLORS.panelDark,
     ).setOrigin(0);
-    const focused = index === this.optionCursor;
+    const focused = !this.startCursor && index === this.optionCursor;
     rect.setStrokeStyle(focused ? 4 : 2, selected || focused ? ACTIVE_LINE : COLORS.line);
     this.configureButton(rect, option, index, selected, COLORS.panelDark);
 
@@ -102,7 +94,7 @@ export class ModeSelectScene extends Phaser.Scene {
         .setAlpha(0.88)
         .setWordWrapWidth(MODE_BUTTON_WIDTH - 64),
     );
-    if (selected) addLabel(this, x + MODE_BUTTON_WIDTH - 66, y + 18, '선택', 11).setColor('#72d6ff');
+    if (selected) addLabel(this, x + MODE_BUTTON_WIDTH - 74, y + 18, '선택됨', 11).setColor('#72d6ff');
   }
 
   private createStyleButton(
@@ -119,13 +111,42 @@ export class ModeSelectScene extends Phaser.Scene {
       STYLE_BUTTON_HEIGHT,
       selected ? SELECTED_FILL : 0x211c2d,
     ).setOrigin(0);
-    const focused = index === this.optionCursor;
+    const focused = !this.startCursor && index === this.optionCursor;
     rect.setStrokeStyle(focused ? 4 : 2, selected || focused ? ACTIVE_LINE : COLORS.line);
     this.configureButton(rect, option, index, selected, 0x211c2d);
 
     this.add.rectangle(x + 16, y + 13, 8, 28, selected ? ACTIVE_LINE : COLORS.line, 0.92).setOrigin(0);
     addLabel(this, x + 42, y + 14, option.label, 19);
-    if (selected) addLabel(this, x + STYLE_BUTTON_WIDTH - 58, y + 18, '선택', 10).setColor('#72d6ff');
+    if (selected) addLabel(this, x + STYLE_BUTTON_WIDTH - 66, y + 18, '선택됨', 10).setColor('#72d6ff');
+  }
+
+  private createStartButton(): void {
+    const enabled = shouldStartRun(this.choice);
+    const x = 340;
+    const y = 468;
+    const width = 344;
+    const height = 42;
+    const rect = this.add.rectangle(x, y, width, height, enabled ? 0x181522 : 0x252331, 0.96)
+      .setOrigin(0)
+      .setStrokeStyle(this.startCursor ? 4 : 2, this.startCursor ? ACTIVE_LINE : COLORS.line, enabled ? 0.94 : 0.36);
+    rect.setAlpha(enabled ? 1 : 0.54);
+
+    if (enabled) {
+      rect.setInteractive({ useHandCursor: true });
+      rect.on('pointerover', () => {
+        this.startCursor = true;
+        this.render();
+      });
+      rect.on('pointerdown', () => this.startRun());
+    }
+
+    const modeLabel = this.choice.mode === 'learning' ? '학습모드' : this.choice.mode === 'challenge' ? '도전모드' : '';
+    const styleLabel = this.choice.visualStyle === 'character' ? '캐릭터풍' : this.choice.visualStyle === 'micro' ? '실사풍' : '';
+    const selection = enabled ? `${modeLabel} · ${styleLabel}` : '두 항목을 선택해주세요';
+    addLabel(this, x + 20, y + height / 2, '게임 시작', 17).setOrigin(0, 0.5);
+    addLabel(this, x + width - 18, y + height / 2, selection, 12)
+      .setOrigin(1, 0.5)
+      .setColor(enabled ? '#dff7ff' : '#aaa5b5');
   }
 
   private configureButton(
@@ -147,14 +168,8 @@ export class ModeSelectScene extends Phaser.Scene {
   private handleOptionPress(option: ModeSelectOption): void {
     if (this.starting) return;
     this.choice = resolveModeSelectChoice(this.choice, option);
+    this.startCursor = shouldStartRun(this.choice);
     this.render();
-
-    if (shouldStartRun(this.choice)) {
-      this.starting = true;
-      const mode: RunMode = this.choice.mode;
-      const visualStyle: VisualStyle = this.choice.visualStyle;
-      this.time.delayedCall(120, () => this.scene.start('StarterSelectScene', { mode, visualStyle }));
-    }
   }
 
   private handleKeyboardDown = (event: KeyboardEvent): void => {
@@ -164,13 +179,37 @@ export class ModeSelectScene extends Phaser.Scene {
     event.preventDefault();
 
     if (command === 'left' || command === 'right') {
+      if (this.startCursor) {
+        this.startCursor = false;
+        this.optionCursor = this.choice.visualStyle === 'micro' ? 3 : 2;
+        this.render();
+        return;
+      }
       this.optionCursor = this.optionCursor % 2 === 0 ? this.optionCursor + 1 : this.optionCursor - 1;
       this.render();
       return;
     }
-    if (command === 'up' || command === 'down') {
-      this.optionCursor = (this.optionCursor + 2) % 4;
+    if (command === 'up') {
+      if (this.startCursor) {
+        this.startCursor = false;
+        this.optionCursor = this.choice.visualStyle === 'micro' ? 3 : 2;
+      } else {
+        this.optionCursor = (this.optionCursor + 2) % 4;
+      }
       this.render();
+      return;
+    }
+    if (command === 'down') {
+      if (this.optionCursor >= 2 && shouldStartRun(this.choice)) {
+        this.startCursor = true;
+      } else {
+        this.optionCursor = (this.optionCursor + 2) % 4;
+      }
+      this.render();
+      return;
+    }
+    if (command === 'confirm' && this.startCursor) {
+      this.startRun();
       return;
     }
     if (command === 'confirm') {
@@ -178,6 +217,14 @@ export class ModeSelectScene extends Phaser.Scene {
       if (option) this.handleOptionPress(option);
     }
   };
+
+  private startRun(): void {
+    if (this.starting || !shouldStartRun(this.choice)) return;
+    this.starting = true;
+    const mode: RunMode = this.choice.mode;
+    const visualStyle: VisualStyle = this.choice.visualStyle;
+    this.scene.start('StarterSelectScene', { mode, visualStyle });
+  }
 
   private isSelected(option: ModeSelectOption): boolean {
     return option.kind === 'mode'
