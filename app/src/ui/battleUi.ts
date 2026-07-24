@@ -4,7 +4,6 @@ import { ATTACK_TYPE_LABELS, TAG_LABELS } from '../data/labels';
 import { MOVES } from '../data/moves';
 import { BOSS_ATTACK_MOVE_IDS } from '../data/bossAttackMatchups';
 import {
-  effectiveMaxHp,
   STATUS_CONDITIONS,
   STATUS_CONDITION_IDS,
   statusConditionEffectText,
@@ -346,7 +345,8 @@ export function pathimonSpriteAssets(monster: PathimonSpriteSource, visualStyle:
 }
 
 export function combatSpriteScale(monster: RuntimeMonster, baseScale: number): number {
-  return monster.isTrainer ? 2.75 : baseScale;
+  const trainerScale = monster.isTrainer ? 2.75 : baseScale;
+  return monster.isBoss && monster.bossPhase2Activated ? trainerScale * 1.2 : trainerScale;
 }
 
 export function pathimonTypeBorderColor(monster: RuntimeMonster, mode: RunMode): number | undefined {
@@ -789,7 +789,7 @@ export function resolveMoveSelectionPress(input: MoveSelectionPressInput): MoveS
 }
 
 export function hpPct(monster: RuntimeMonster): number {
-  return monster.hp / effectiveMaxHp(monster);
+  return monster.hp / Math.max(1, monster.maxHp);
 }
 
 export function hpPercentLabel(monster: RuntimeMonster): string {
@@ -1152,12 +1152,17 @@ export function symptomDetailLines(monster: RuntimeMonster): string[] {
 
 export function symptomSummary(monster: RuntimeMonster): string {
   const labels = countedLabels(monster.symptoms ?? []);
-  return labels.length > 0 ? labels.join(', ') : '관찰 중';
+  return labels.length > 0 ? compactLabels(labels) : '관찰 중';
 }
 
 export function statusSummary(monster: RuntimeMonster): string {
   const labels = effectLabels(monster);
-  return labels.length > 0 ? `상태: ${labels.join(', ')}` : '상태: 정상';
+  return labels.length > 0 ? `상태: ${compactLabels(labels)}` : '상태: 정상';
+}
+
+function compactLabels(labels: string[], visibleCount = 3): string {
+  if (labels.length <= visibleCount) return labels.join(', ');
+  return `${labels.slice(0, visibleCount).join(', ')} 외 ${labels.length - visibleCount}`;
 }
 
 export function battleUnitPanelRows(monster: RuntimeMonster, role: BattleUnitPanelRole): BattleUnitPanelRow[] {

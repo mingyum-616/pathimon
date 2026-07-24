@@ -50,6 +50,9 @@ function cloneMonster(monster: RuntimeMonster): RuntimeMonster {
     bossMaintenanceQueued: monster.bossMaintenanceQueued,
     plannedMoveIds: monster.plannedMoveIds ? [...monster.plannedMoveIds] : undefined,
     bossPhase2Activated: monster.bossPhase2Activated,
+    bossPhase2Pending: monster.bossPhase2Pending,
+    encounterDialogue: monster.encounterDialogue ? [...monster.encounterDialogue] : undefined,
+    phase2Dialogue: monster.phase2Dialogue ? [...monster.phase2Dialogue] : undefined,
     profileMemo: monster.profileMemo ? [...monster.profileMemo] : undefined,
     countermeasures: monster.countermeasures ? {
       direct: [...monster.countermeasures.direct],
@@ -200,8 +203,12 @@ function setWinState(state: RunState, message: string, _learningDetail?: string,
   };
 }
 
+function canEnterBattle(monster: RuntimeMonster | undefined): monster is RuntimeMonster {
+  return Boolean(monster && monster.hp > 0 && !monster.fainted && !monster.sealedByBoss);
+}
+
 function hasAvailableReplacement(state: RunState): boolean {
-  return state.party.some((monster, index) => index !== state.activeIndex && monster.hp > 0 && !monster.fainted);
+  return state.party.some((monster, index) => index !== state.activeIndex && canEnterBattle(monster));
 }
 
 function setCollapsedState(state: RunState, actor: RuntimeMonster): RunState {
@@ -329,11 +336,11 @@ function isHumanEnemy(enemy: RuntimeMonster): boolean {
 }
 
 function bossUsesPhaseTwo(enemy: RuntimeMonster): boolean {
-  return Boolean(enemy.isBoss && (enemy.bossPhase2Activated || enemy.hp <= enemy.maxHp / 2));
+  return Boolean(enemy.isBoss && enemy.bossPhase2Activated);
 }
 
 function availablePartyTargets(party: RuntimeMonster[], activeIndex: number): RuntimeMonster[] {
-  return party.filter((monster, index) => index !== activeIndex && monster.hp > 0 && !monster.fainted);
+  return party.filter((monster, index) => index !== activeIndex && canEnterBattle(monster));
 }
 
 function randomPartyTarget(party: RuntimeMonster[], activeIndex: number, random = Math.random): RuntimeMonster | undefined {
@@ -348,12 +355,13 @@ function chooseMoveForTarget(
   target: RuntimeMonster,
   movePool: MoveId[] = enemy.moveset,
   preferEffective = false,
+  random: () => number = Math.random,
 ): MoveId | undefined {
   const profile = createBossDefenseProfile(target);
   if (preferEffective) {
-    return chooseEffectiveBossMove(movePool, profile) ?? chooseBossMove(movePool, profile);
+    return chooseEffectiveBossMove(movePool, profile, random) ?? chooseBossMove(movePool, profile, [], random);
   }
-  return chooseBossMove(movePool, profile);
+  return chooseBossMove(movePool, profile, [], random);
 }
 
 function planHumanMoves(
@@ -361,6 +369,7 @@ function planHumanMoves(
   defender: RuntimeMonster,
   party: RuntimeMonster[] = [defender],
   activeIndex = 0,
+  random: () => number = Math.random,
 ): MoveId[] {
   if (!isHumanEnemy(enemy)) {
     return enemy.moveset[0] ? [enemy.moveset[0]] : [];
@@ -376,17 +385,23 @@ function planHumanMoves(
   }
 
   if (!bossUsesPhaseTwo(enemy)) {
-    const planned = chooseMoveForTarget(enemy, defender);
+    const planned = chooseMoveForTarget(enemy, defender, enemy.moveset, false, random);
     enemy.plannedMoveIds = planned ? [planned] : [];
     enemy.plannedMoveId = planned;
     return enemy.plannedMoveIds;
   }
 
   enemy.bossPhase2Activated = true;
-  const first = chooseMoveForTarget(enemy, defender, enemy.moveset, true);
-  const secondTarget = randomPartyTarget(party, activeIndex) ?? defender;
+  const first = chooseMoveForTarget(enemy, defender, enemy.moveset, true, random);
+  const secondTarget = randomPartyTarget(party, activeIndex, random) ?? defender;
   const secondPool = first ? enemy.moveset.filter((moveId) => moveId !== first) : enemy.moveset;
-  const second = chooseMoveForTarget(enemy, secondTarget, secondPool.length > 0 ? secondPool : enemy.moveset, true);
+  const second = chooseMoveForTarget(
+    enemy,
+    secondTarget,
+    secondPool.length > 0 ? secondPool : enemy.moveset,
+    true,
+    random,
+  );
   const planned = [first, second].filter((moveId): moveId is MoveId => Boolean(moveId));
 
   enemy.plannedMoveIds = planned;
@@ -397,6 +412,84 @@ function planHumanMoves(
 function clearPlannedHumanMoves(enemy: RuntimeMonster): void {
   enemy.plannedMoveId = undefined;
   enemy.plannedMoveIds = [];
+}
+
+export function bossPhaseTwoDialogue(enemy: RuntimeMonster, floor: number): string[] {
+  if (enemy.phase2Dialogue?.length) return [...enemy.phase2Dialogue];
+  return floor <= 60 ? ['...'] : [];
+}
+
+export function activateBossPhaseTwo(state: RunState, random: () => number = Math.random): RunState {
+  const nextState = cloneState(state);
+  const enemy = nextState.enemy;
+  const actor = nextState.party[nextState.activeIndex];
+  if (!enemy?.isBoss || !actor || !enemy.bossPhase2Pending || enemy.hp <= 0) return nextState;
+
+  enemy.bossPhase2Pending = false;
+  enemy.bossPhase2Activated = true;
+  clearPlannedHumanMoves(enemy);
+  planHumanMoves(enemy, actor, nextState.party, nextState.activeIndex, random);
+  return nextState;
+}
+
+export function applyFinalBossSkill(state: RunState, random: () => number = Math.random): RunState {
+  const nextState = cloneState(state);
+  const enemy = nextState.enemy;
+  if (
+    nextState.floor !== 100
+    || !enemy?.isBoss
+    || enemy.finalBossSkill !== 'seal'
+    || enemy.finalBossSkillApplied
+  ) {
+    return nextState;
+  }
+
+  const candidates = nextState.party
+    .map((monster, index) => ({ monster, index }))
+    .filter(({ monster }) => canEnterBattle(monster));
+  if (candidates.length === 0) return nextState;
+
+  const selectedIndex = Math.min(candidates.length - 1, Math.max(0, Math.floor(random() * candidates.length)));
+  const selected = candidates[selectedIndex];
+  const original = selected.monster;
+  nextState.party[selected.index] = {
+    ...original,
+    templateId: `sealed_${original.templateId}`,
+    name: '봉인 인형',
+    scientificName: `${original.name}이 봉인된 대타 인형`,
+    category: '봉인',
+    glyph: 'DOLL',
+    assetPath: 'images/pathimon/substitute-doll.png',
+    assetBaseId: undefined,
+    ability: 'none',
+    abilities: [],
+    moveset: [],
+    moveSlots: [null, null, null, null],
+    moveStages: {},
+    effects: [],
+    statusConditions: {},
+    symptoms: [],
+    symptomAttributions: [],
+    stunned: false,
+    sealedByBoss: true,
+    sealedOriginalName: original.name,
+    spriteCrop: { frontX: 0, backX: 64, width: 64, height: 64 },
+  };
+  enemy.finalBossSkillApplied = true;
+  nextState.lastLog = `${enemy.name}의 ${enemy.finalBossSkillName ?? '봉인'}! ${original.name}이 인형에 봉인되었다.`;
+
+  if (selected.index === nextState.activeIndex) {
+    const replacementIndex = nextState.party.findIndex((monster, index) => index !== selected.index && canEnterBattle(monster));
+    if (replacementIndex >= 0) {
+      nextState.phase = 'forcedSwitch';
+      nextState.lastLog += ' 다음 패시몬을 선택하세요.';
+    } else {
+      nextState.phase = 'defeat';
+      nextState.lastLog += ' 더 이상 전투 가능한 패시몬이 없습니다.';
+    }
+  }
+
+  return nextState;
 }
 
 function announcedTreatmentMultiplier(enemy: RuntimeMonster, defender: RuntimeMonster): number {
@@ -571,10 +664,17 @@ function finishBattleRound(
     return setCollapsedState(state, actor);
   }
 
-  if (enemy.isBoss && enemy.hp > 0 && enemy.hp <= enemy.maxHp / 2) {
-    enemy.bossPhase2Activated = true;
+  if (
+    enemy.isBoss
+    && enemy.hp > 0
+    && enemy.hp <= enemy.maxHp / 2
+    && !enemy.bossPhase2Activated
+    && !enemy.bossPhase2Pending
+  ) {
+    enemy.bossPhase2Pending = true;
+    clearPlannedHumanMoves(enemy);
   }
-  if (isHumanEnemy(enemy) && actor.hp > 0 && enemy.hp > 0) {
+  if (isHumanEnemy(enemy) && actor.hp > 0 && enemy.hp > 0 && !enemy.bossPhase2Pending) {
     planHumanMoves(enemy, actor, state.party, state.activeIndex);
   }
   state.phase = 'battle';
@@ -603,6 +703,11 @@ export function resolvePlayerMove(
 
   if (!actor || !enemy || !move) {
     return nextState;
+  }
+
+  if (actor.sealedByBoss) {
+    nextState.lastLog = '봉인 인형은 기술을 사용할 수 없습니다.';
+    return setCollapsedState(nextState, actor);
   }
 
   // 패시몬끼리는 싸우지 않는다. 야생 조우는 포획·통과 전용이고 전투는 보스·트레이너와만 성립한다.
@@ -700,8 +805,8 @@ export function resolveForcedSwitchMonster(state: RunState, targetIndex: number)
   const nextState = cloneState(state);
   const target = nextState.party[targetIndex];
 
-  if (nextState.phase !== 'forcedSwitch' || !target || targetIndex === nextState.activeIndex || target.fainted || target.hp <= 0) {
-    nextState.lastLog = '다음 패시몬을 선택해야 합니다.';
+  if (nextState.phase !== 'forcedSwitch' || !target || targetIndex === nextState.activeIndex || !canEnterBattle(target)) {
+    nextState.lastLog = target?.sealedByBoss ? '봉인된 패시몬은 전투에 나올 수 없습니다.' : '다음 패시몬을 선택해야 합니다.';
     return nextState;
   }
 
@@ -728,8 +833,8 @@ export function resolveSwitchMonster(
   const target = nextState.party[targetIndex];
   const enemy = nextState.enemy;
 
-  if (!enemy || !target || targetIndex === nextState.activeIndex || target.fainted || target.hp <= 0) {
-    nextState.lastLog = '교체할 패시몬이 없습니다.';
+  if (!enemy || !target || targetIndex === nextState.activeIndex || !canEnterBattle(target)) {
+    nextState.lastLog = target?.sealedByBoss ? '봉인된 패시몬은 교체할 수 없습니다.' : '교체할 패시몬이 없습니다.';
     return nextState;
   }
 

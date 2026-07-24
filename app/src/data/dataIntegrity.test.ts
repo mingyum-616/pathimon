@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { ABILITIES } from './abilities';
-import { BOSSES } from './bosses';
+import { BOSSES, LATE_GAME_BOSS_IDS, createBossRosterIds } from './bosses';
 import { BOSS_ATTACK_MOVE_IDS } from './bossAttackMatchups';
 import { EFFECTIVENESS } from './effectiveness';
 import { MONSTERS, STARTER_ID, TOTAL_FLOORS } from './monsters';
@@ -50,6 +50,30 @@ function hasInvulnerabilityPrimitive(move: (typeof MOVES)[string]): boolean {
 }
 
 describe('Pathimon data', () => {
+  it('reserves floors 70-100 for the four professor bosses in shuffled order', () => {
+    const roster = createBossRosterIds(() => 0, 10);
+
+    expect(roster).toHaveLength(10);
+    expect(new Set(roster.slice(6))).toEqual(new Set(LATE_GAME_BOSS_IDS));
+    expect(roster.slice(0, 6).some((bossId) => LATE_GAME_BOSS_IDS.includes(bossId))).toBe(false);
+  });
+
+  it('gives every professor boss an exclusive named asset and keeps Prof. P parasite mastery', () => {
+    const professors = LATE_GAME_BOSS_IDS.map((id) => BOSSES.find((boss) => boss.id === id));
+
+    expect(professors.every(Boolean)).toBe(true);
+    expect(professors.map((boss) => boss?.assetPath)).toEqual([
+      'images/trainers/boss/prof_p.png',
+      'images/trainers/boss/prof_s.png',
+      'images/trainers/boss/prof_k.png',
+      'images/trainers/boss/prof_w.png',
+    ]);
+    expect(new Set(professors.map((boss) => boss?.assetPath)).size).toBe(4);
+
+    const profPIndex = BOSSES.findIndex((boss) => boss.id === 'prof_p');
+    expect(createBossInstance(profPIndex, 70).abilities).toContain('parasite_master');
+  });
+
   it('has a valid starter with a scientific name', () => {
     const starter = MONSTERS.find((monster) => monster.id === STARTER_ID);
 
@@ -436,6 +460,7 @@ describe('Pathimon data', () => {
       'no_nucleic',
       'none',
       'oxidative_neutral',
+      'parasite_master',
       'phagolysosome_block',
       'proteinA',
       'receptor_defect',

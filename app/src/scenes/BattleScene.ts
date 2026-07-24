@@ -5,6 +5,8 @@ import {
   stopHtmlBattleBgm,
 } from '../audio/htmlBgm';
 import {
+  activateBossPhaseTwo,
+  bossPhaseTwoDialogue,
   cancelPendingCapture,
   resolveCapsuleAction,
   resolveCaptureRelease,
@@ -66,13 +68,14 @@ import {
 import type { BattleActionId, BattleUnitPanelRole, PartyMenuPurpose, PathimonTypeIcon } from '../ui/battleUi';
 import { destroySceneChildren } from '../ui/sceneCleanup';
 import { addBoxLabel, addLabel, drawHpBar, drawPanel } from '../ui/draw';
+import { advanceTypewriter } from '../ui/typewriter';
 
 interface BattleSceneData {
   state?: RunState;
 }
 
 type BattleViewMode = 'command' | 'moves' | 'dex' | 'party' | 'status' | 'capsules';
-type BattleMessageStage = 'preparation' | 'combat' | 'status';
+type BattleMessageStage = 'preparation' | 'combat' | 'status' | 'dialogue';
 type DexTab = 'moves' | 'effectiveness';
 type StatusTab = 'profile' | 'moves';
 type Direction = 'up' | 'down' | 'left' | 'right';
@@ -85,6 +88,8 @@ const OVERLAY_STROKE = 0xd8cde6;
 const OVERLAY_TEXT = 0xce6b5e;
 const BATTLE_EFFECT_DEPTH = 760;
 const BATTLE_STATUS_HOLD_MS = 1000;
+const TYPEWRITER_INTERVAL_MS = 24;
+const PHASE_TWO_BOSS_SCALE = 1.2;
 
 export class BattleScene extends Phaser.Scene {
   private state!: RunState;
@@ -112,6 +117,10 @@ export class BattleScene extends Phaser.Scene {
   private statusTooltipTimer?: Phaser.Time.TimerEvent;
   private battleMessageStage: BattleMessageStage = 'preparation';
   private battleMessageTimer?: Phaser.Time.TimerEvent;
+  private bossDialogueLines: string[] = [];
+  private bossDialogueIndex = 0;
+  private bossDialogueVisibleCharacters = 0;
+  private bossDialogueText?: Phaser.GameObjects.Text;
   private floorClearPage = 0;
 
   constructor() {
@@ -142,6 +151,10 @@ export class BattleScene extends Phaser.Scene {
     this.playerCombatSprite = undefined;
     this.battleMessageStage = 'preparation';
     this.battleMessageTimer = undefined;
+    this.bossDialogueLines = [];
+    this.bossDialogueIndex = 0;
+    this.bossDialogueVisibleCharacters = 0;
+    this.bossDialogueText = undefined;
     this.floorClearPage = 0;
   }
 
@@ -368,12 +381,20 @@ export class BattleScene extends Phaser.Scene {
       spriteLayout.enemy.x,
       spriteLayout.enemy.y,
       this.spriteScaleFor(enemy, spriteLayout.enemy.scale),
+      'front',
     );
 
     this.add.image(layerLayout.playerPlatform.x, layerLayout.playerPlatform.y, assets.grassMid)
       .setOrigin(0)
       .setScale(layerLayout.playerPlatform.scale);
-    this.playerCombatSprite = this.drawMonsterSprite(player, playerAssets.back, spriteLayout.player.x, spriteLayout.player.y, spriteLayout.player.scale);
+    this.playerCombatSprite = this.drawMonsterSprite(
+      player,
+      playerAssets.back,
+      spriteLayout.player.x,
+      spriteLayout.player.y,
+      spriteLayout.player.scale,
+      'back',
+    );
   }
 
   private drawMonsterSprite(
@@ -382,11 +403,19 @@ export class BattleScene extends Phaser.Scene {
     x: number,
     y: number,
     scale: number,
+    perspective: 'front' | 'back' = 'front',
   ): Phaser.GameObjects.Image | Phaser.GameObjects.Text {
     if (this.textures.exists(textureKey)) {
       const frame = this.textures.getFrame(textureKey);
-      const fittedScale = normalizedSpriteScale(scale, frame?.width ?? 96);
-      return this.add.image(x, y, textureKey).setOrigin(0.5, 1).setScale(fittedScale);
+      const crop = monster.spriteCrop;
+      const sourceWidth = crop?.width ?? frame?.width ?? 96;
+      const fittedScale = normalizedSpriteScale(scale, sourceWidth);
+      const image = this.add.image(x, y, textureKey).setOrigin(0.5, 1).setScale(fittedScale);
+      if (crop) {
+        const cropX = perspective === 'back' ? crop.backX : crop.frontX;
+        image.setCrop(cropX, 0, crop.width, crop.height);
+      }
+      return image;
     }
 
     return addLabel(this, x, y - 74, monster.glyph, 54).setOrigin(0.5);
@@ -628,7 +657,7 @@ export class BattleScene extends Phaser.Scene {
       this.notice,
       helperText,
       this.state.floor === 1 && this.state.encounterKind === 'wild'
-        ? '야생 조우: 계열에 맞는 캡슐로 포획하거나 지나갈 수 있습니다.'
+        ? '첫 4층에서 파티를 채우면 5층 사람 전투가 훨씬 안정적입니다.'
         : '',
     ).forEach((line, index) => {
       const fontSize = index === 0 ? 24 : index === 1 ? 17 : 15;
@@ -655,6 +684,11 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private drawBattleMessageView(): void {
+    if (this.battleMessageStage === 'dialogue') {
+      this.drawBossDialogueView();
+      return;
+    }
+
     const statusStage = this.battleMessageStage === 'status';
     const message = statusStage
       ? this.state.battleStatusLog ?? ''
@@ -668,6 +702,37 @@ export class BattleScene extends Phaser.Scene {
       maxLines: statusStage ? 4 : 8,
     }).setAlpha(0.94);
 
+    this.add.zone(APP_WIDTH / 2, APP_HEIGHT / 2, APP_WIDTH, APP_HEIGHT)
+      .setDepth(980)
+      .setInteractive({ useHandCursor: true })
+      .once('pointerdown', () => this.advanceBattleMessage());
+  }
+
+  private drawBossDialogueView(): void {
+    const enemyName = this.state.enemy?.name ?? '보스';
+    addBoxLabel(this, 34, 404, enemyName, {
+      width: APP_WIDTH - 68,
+      height: 24,
+      size: 15,
+      minSize: 12,
+      maxLines: 1,
+      color: '#72d6ff',
+    });
+    const line = this.bossDialogueLines[this.bossDialogueIndex] ?? '';
+    this.bossDialogueText = addBoxLabel(
+      this,
+      34,
+      444,
+      line.slice(0, this.bossDialogueVisibleCharacters),
+      {
+        width: APP_WIDTH - 68,
+        height: 76,
+        size: 25,
+        minSize: 17,
+        maxLines: 3,
+      },
+    );
+    addLabel(this, APP_WIDTH - 44, 522, '▼', 16).setOrigin(1, 0).setAlpha(0.72);
     this.add.zone(APP_WIDTH / 2, APP_HEIGHT / 2, APP_WIDTH, APP_HEIGHT)
       .setDepth(980)
       .setInteractive({ useHandCursor: true })
@@ -698,6 +763,13 @@ export class BattleScene extends Phaser.Scene {
 
   private drawMoveView(player: RuntimeMonster): void {
     addLabel(this, 34, 408, '기술', 22);
+    addBoxLabel(this, 92, 410, '한 번 선택: 설명 확인 · 같은 기술 다시 선택: 사용', {
+      width: 390,
+      height: 18,
+      size: 12,
+      minSize: 10,
+      maxLines: 1,
+    }).setAlpha(0.72);
     battleMoveSlots(player).forEach((moveId, index) => {
       const column = index % 2;
       const row = Math.floor(index / 2);
@@ -1049,6 +1121,11 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private advanceBattleMessage(): void {
+    if (this.battleMessageStage === 'dialogue') {
+      this.advanceBossDialogue();
+      return;
+    }
+
     if (this.battleMessageStage === 'combat') {
       this.showStatusMessage();
       return;
@@ -1061,11 +1138,16 @@ export class BattleScene extends Phaser.Scene {
 
   private finishBattleMessages(): void {
     this.clearBattleMessageTimer();
-    this.battleMessageStage = 'preparation';
     this.state.battleActionLog = undefined;
     this.state.battleStatusLog = undefined;
     this.state.battleStatusDamage = undefined;
 
+    if (this.state.enemy?.bossPhase2Pending && this.state.phase !== 'defeat') {
+      this.beginBossPhaseTwoDialogue();
+      return;
+    }
+
+    this.battleMessageStage = 'preparation';
     if (this.state.phase === 'battle') {
       this.notice = '';
       this.render();
@@ -1073,6 +1155,101 @@ export class BattleScene extends Phaser.Scene {
     }
 
     this.afterBattleAction();
+  }
+
+  private beginBossPhaseTwoDialogue(): void {
+    const enemy = this.state.enemy;
+    if (!enemy) {
+      this.battleMessageStage = 'preparation';
+      this.afterBattleAction();
+      return;
+    }
+
+    this.bossDialogueLines = bossPhaseTwoDialogue(enemy, this.state.floor);
+    this.bossDialogueIndex = 0;
+    this.bossDialogueVisibleCharacters = 0;
+    if (this.bossDialogueLines.length === 0) {
+      this.playBossPhaseTwoPowerUp();
+      return;
+    }
+
+    this.battleMessageStage = 'dialogue';
+    this.render();
+    this.startBossDialogueTyping();
+  }
+
+  private startBossDialogueTyping(): void {
+    this.clearBattleMessageTimer();
+    const line = this.bossDialogueLines[this.bossDialogueIndex] ?? '';
+    this.bossDialogueText?.setText(line.slice(0, this.bossDialogueVisibleCharacters));
+    if (this.bossDialogueVisibleCharacters >= line.length) return;
+
+    this.battleMessageTimer = this.time.addEvent({
+      delay: TYPEWRITER_INTERVAL_MS,
+      loop: true,
+      callback: () => {
+        this.bossDialogueVisibleCharacters = Math.min(
+          line.length,
+          this.bossDialogueVisibleCharacters + 1,
+        );
+        this.bossDialogueText?.setText(line.slice(0, this.bossDialogueVisibleCharacters));
+        if (this.bossDialogueVisibleCharacters >= line.length) {
+          this.clearBattleMessageTimer();
+        }
+      },
+    });
+  }
+
+  private advanceBossDialogue(): void {
+    if (this.isAnimating) return;
+    const advance = advanceTypewriter(
+      this.bossDialogueLines,
+      this.bossDialogueIndex,
+      this.bossDialogueVisibleCharacters,
+    );
+    this.bossDialogueIndex = advance.lineIndex;
+    this.bossDialogueVisibleCharacters = advance.visibleCharacters;
+
+    if (advance.action === 'reveal') {
+      this.clearBattleMessageTimer();
+      this.bossDialogueText?.setText(this.bossDialogueLines[this.bossDialogueIndex] ?? '');
+      return;
+    }
+
+    if (advance.action === 'next') {
+      this.bossDialogueText?.setText('');
+      this.startBossDialogueTyping();
+      return;
+    }
+
+    this.playBossPhaseTwoPowerUp();
+  }
+
+  private playBossPhaseTwoPowerUp(): void {
+    this.clearBattleMessageTimer();
+    this.isAnimating = true;
+    const finish = () => {
+      this.state = activateBossPhaseTwo(this.state, Math.random);
+      this.battleMessageStage = 'preparation';
+      this.viewMode = 'command';
+      this.notice = '';
+      this.isAnimating = false;
+      this.render();
+    };
+    const sprite = this.enemyCombatSprite;
+    if (!sprite) {
+      finish();
+      return;
+    }
+
+    this.tweens.add({
+      targets: sprite,
+      scaleX: sprite.scaleX * PHASE_TWO_BOSS_SCALE,
+      scaleY: sprite.scaleY * PHASE_TWO_BOSS_SCALE,
+      duration: 460,
+      ease: 'Sine.easeOut',
+      onComplete: finish,
+    });
   }
 
   private clearBattleMessageTimer(): void {
@@ -1496,12 +1673,16 @@ export class BattleScene extends Phaser.Scene {
     const y = 34 + index * 74;
     const width = 502;
     const height = 62;
-    const unusable = monster.fainted || monster.hp <= 0;
+    const unusable = monster.fainted || monster.hp <= 0 || Boolean(monster.sealedByBoss);
     const rect = this.add.rectangle(x, y, width, height, selected ? 0x0b6280 : 0x07344d, unusable ? 0.45 : 0.92).setOrigin(0);
     rect.setStrokeStyle(selected ? 4 : 2, this.pathimonFrameBorderColor(monster, selected ? 0xffffff : 0x2ee9ff));
     rect.setInteractive({ useHandCursor: true });
     rect.on('pointerdown', () => {
       this.partyCursor = index;
+      if (this.state.phase === 'forcedSwitch') {
+        this.handlePartySwitch(index);
+        return;
+      }
       this.partyMenuOpen = true;
       this.partyMenuCursor = 0;
       this.render();
@@ -1514,7 +1695,14 @@ export class BattleScene extends Phaser.Scene {
     const assets = pathimonSpriteAssets(monster, this.state.visualStyle);
     this.drawMonsterSprite(monster, assets.front, x + 34, y + 57, 0.72);
     addBoxLabel(this, x + 78, y + 9, monster.name, { width: 200, height: 24, size: 19, minSize: 12, maxLines: 1 });
-    addBoxLabel(this, x + 78, y + 36, index === this.state.activeIndex ? '현재' : unusable ? '기절' : '', {
+    const stateLabel = index === this.state.activeIndex
+      ? '현재'
+      : monster.sealedByBoss
+        ? '봉인'
+        : unusable
+          ? '기절'
+          : '';
+    addBoxLabel(this, x + 78, y + 36, stateLabel, {
       width: 90,
       height: 16,
       size: 12,
@@ -1900,6 +2088,10 @@ export class BattleScene extends Phaser.Scene {
 
     if (this.viewMode === 'party' || this.state.phase === 'forcedSwitch' || this.state.phase === 'releaseCapture') {
       if (!this.partyMenuOpen) {
+        if (this.state.phase === 'forcedSwitch') {
+          this.handlePartySwitch(this.partyCursor);
+          return;
+        }
         this.partyMenuOpen = true;
         this.partyMenuCursor = 0;
         this.render();

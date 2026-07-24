@@ -20,6 +20,9 @@ function cloneMonster(monster: RuntimeMonster): RuntimeMonster {
     bossMaintenanceQueued: monster.bossMaintenanceQueued,
     plannedMoveIds: monster.plannedMoveIds ? [...monster.plannedMoveIds] : undefined,
     bossPhase2Activated: monster.bossPhase2Activated,
+    bossPhase2Pending: monster.bossPhase2Pending,
+    encounterDialogue: monster.encounterDialogue ? [...monster.encounterDialogue] : undefined,
+    phase2Dialogue: monster.phase2Dialogue ? [...monster.phase2Dialogue] : undefined,
     profileMemo: monster.profileMemo ? [...monster.profileMemo] : undefined,
     countermeasures: monster.countermeasures ? {
       direct: [...monster.countermeasures.direct],

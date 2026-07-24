@@ -506,7 +506,7 @@ describe('battle UI helpers', () => {
       '지속피해',
       '개종',
     ]);
-    expect(statusSummary(monster)).toBe('상태: 공격 +1, 피해감소, 무적 3턴, 지속피해, 개종');
+    expect(statusSummary(monster)).toBe('상태: 공격 +1, 피해감소, 무적 3턴 외 2');
   });
 
   it('uses player-facing labels for temporary preparation effects', () => {
@@ -624,7 +624,7 @@ describe('battle UI helpers', () => {
     });
 
     expect(effectLabels(monster)).toEqual(['발열(3)', '기침', '면역 이상(2)', '괴사(2)', '시력 이상(2)', '청력 이상', '통증', '가려움', '황달']);
-    expect(statusSummary(monster)).toBe('상태: 발열(3), 기침, 면역 이상(2), 괴사(2), 시력 이상(2), 청력 이상, 통증, 가려움, 황달');
+    expect(statusSummary(monster)).toBe('상태: 발열(3), 기침, 면역 이상(2) 외 6');
   });
 
   it('stacks repeated boss symptoms in the displayed symptom summary', () => {
@@ -649,16 +649,16 @@ describe('battle UI helpers', () => {
     expect(canUseBattleMove(monster, 'hyaluronidase')).toBe(true);
   });
 
-  it('uses necrosis-adjusted max hp for hp percentage labels', () => {
+  it('keeps hp percentage relative to base max hp when necrosis lowers the cap', () => {
     const monster = createMonster({
       maxHp: 200,
       hp: 95,
-      // 괴사는 스택당 2.5%다. 2스택이면 상한 190이 되어 95가 정확히 절반이다.
+      // 상한은 190으로 줄지만, 퍼센트는 회복처럼 올라가 보이지 않도록 원래 최대 HP를 기준으로 한다.
       statusConditions: { necrosis: 2 },
     });
 
-    expect(hpPct(monster)).toBe(0.5);
-    expect(hpPercentLabel(monster)).toBe('50%');
+    expect(hpPct(monster)).toBe(0.475);
+    expect(hpPercentLabel(monster)).toBe('48%');
   });
 
   it('uses a short fallback label when no status effects are active', () => {

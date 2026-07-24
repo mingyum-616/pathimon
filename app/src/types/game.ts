@@ -95,6 +95,7 @@ export type AbilityId =
   | 'antitoxin'
   | 'receptor_defect'
   | 'immune_regulation'
+  | 'parasite_master'
   // VOCAB.md §2-3 evasion 중 기존 값으로 표현되지 않던 것 (구 파서는 large_resistance로 뭉갰다)
   | 'cyst'
   | 'larval_migration'
@@ -245,8 +246,14 @@ export interface BossData {
   attack: number;
   defense: number;
   abilityPool: AbilityId[];
+  fixedAbilities?: AbilityId[];
   movePool: MoveId[];
   symptoms: string[];
+  encounterDialogue?: string[];
+  phase2Dialogue?: string[];
+  finalBossSkill?: 'seal';
+  finalBossSkillName?: string;
+  finalBossSkillAnnouncement?: string;
 }
 
 export interface TrainerData {
@@ -299,6 +306,21 @@ export interface RuntimeMonster {
   bossMaintenanceQueued?: boolean;
   plannedMoveIds?: MoveId[];
   bossPhase2Activated?: boolean;
+  bossPhase2Pending?: boolean;
+  encounterDialogue?: string[];
+  phase2Dialogue?: string[];
+  finalBossSkill?: 'seal';
+  finalBossSkillName?: string;
+  finalBossSkillAnnouncement?: string;
+  finalBossSkillApplied?: boolean;
+  sealedByBoss?: boolean;
+  sealedOriginalName?: string;
+  spriteCrop?: {
+    frontX: number;
+    backX: number;
+    width: number;
+    height: number;
+  };
   profileMemo?: string[];
   // 기술 사용 시 맥락 학습을 위해, 기술 → profileMemo 인덱스 매핑(노트 `기술↔학습포인트 대응`).
   movePointMap?: Record<MoveId, number[]>;

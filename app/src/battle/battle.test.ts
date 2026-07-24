@@ -11,7 +11,14 @@ import { applyEffects, tickEffects } from './effects';
 import { calculateMultiplier } from './effectiveness';
 import { buildLoadout, buildMoveSlots } from './loadout';
 import { currentMoveData, currentMoveName } from './moveStages';
-import { resolveForcedSwitchMonster, resolvePlayerMove, resolveSwitchMonster } from './turn';
+import {
+  activateBossPhaseTwo,
+  applyFinalBossSkill,
+  bossPhaseTwoDialogue,
+  resolveForcedSwitchMonster,
+  resolvePlayerMove,
+  resolveSwitchMonster,
+} from './turn';
 
 const attacker: RuntimeMonster = {
   templateId: 'strep',
@@ -987,6 +994,125 @@ describe('battle engine', () => {
     expect(result.party[0].hp).toBeLessThan(500);
     expect(result.enemy?.plannedMoveIds).toHaveLength(2);
   });
+
+  it('queues phase two without generating its two-move telegraph until the transition is acknowledged', () => {
+    const battle = createBattleState({
+      party: [createMonster({ hp: 999, maxHp: 999, attack: 10 })],
+      enemy: createMonster({
+        name: '면역챔피언',
+        category: '보스 사람',
+        moveset: ['m_rx_알벤다졸', 'm_interferon'],
+        plannedMoveIds: ['m_interferon'],
+        plannedMoveId: 'm_interferon',
+        isBoss: true,
+        isTrainer: true,
+        attack: 1,
+        defense: 3,
+        hp: 520,
+        maxHp: 1000,
+      }),
+    });
+
+    const result = resolvePlayerMove(battle, 'enterotoxin', 1, 0, 1);
+
+    expect(result.enemy?.bossPhase2Pending).toBe(true);
+    expect(result.enemy?.bossPhase2Activated).toBeFalsy();
+    expect(result.enemy?.plannedMoveIds).toEqual([]);
+
+    const activated = activateBossPhaseTwo(result, () => 0);
+    expect(activated.enemy?.bossPhase2Pending).toBe(false);
+    expect(activated.enemy?.bossPhase2Activated).toBe(true);
+    expect(activated.enemy?.plannedMoveIds).toHaveLength(2);
+  });
+
+  it('uses the default phase-two line through floor 60 and professor-specific lines afterward', () => {
+    expect(bossPhaseTwoDialogue(createMonster({ isBoss: true }), 60)).toEqual(['...']);
+    expect(bossPhaseTwoDialogue(createMonster({
+      isBoss: true,
+      phase2Dialogue: ['One minute...'],
+    }), 80)).toEqual(['One minute...']);
+    expect(bossPhaseTwoDialogue(createMonster({ isBoss: true }), 80)).toEqual([]);
+  });
+
+  it('halves parasite attacks against Prof. P parasite mastery', () => {
+    const parasite = createMonster({ category: '기생충', attack: 10 });
+    const professor = createMonster({
+      ability: 'parasite_master',
+      abilities: ['parasite_master'],
+      defense: 10,
+      hp: 100,
+      maxHp: 100,
+    });
+
+    expect(calculateDamage(parasite, professor, MOVES.coagulase, 1).multiplier.total).toBe(0.5);
+  });
+
+  it('turns one party member into a move-less substitute when Prof. S uses the floor-100 seal', () => {
+    const battle = createBattleState({
+      floor: 100,
+      party: [
+        createMonster({ name: '선두', hp: 80, maxHp: 80, attack: 20, defense: 10 }),
+        createMonster({ name: '후열', hp: 70, maxHp: 90, attack: 30, defense: 12 }),
+      ],
+      enemy: createMonster({
+        name: '미생물학 교수 Prof. S',
+        isBoss: true,
+        isTrainer: true,
+        finalBossSkill: 'seal',
+      }),
+    });
+
+    const result = applyFinalBossSkill(battle, () => 0.99);
+    const doll = result.party[1];
+
+    expect(doll.name).toBe('봉인 인형');
+    expect(doll.sealedByBoss).toBe(true);
+    expect(doll.sealedOriginalName).toBe('후열');
+    expect(doll.moveset).toEqual([]);
+    expect(doll.maxHp).toBe(90);
+    expect(doll.attack).toBe(30);
+    expect(doll.defense).toBe(12);
+    expect(result.enemy?.finalBossSkillApplied).toBe(true);
+  });
+
+  it('does not allow a sealed substitute to switch into battle', () => {
+    const battle = createBattleState({
+      party: [
+        createMonster({ name: '선두' }),
+        createMonster({ name: '봉인 인형', sealedByBoss: true, moveset: [] }),
+      ],
+    });
+
+    const result = resolveSwitchMonster(battle, 1, 1);
+
+    expect(result.activeIndex).toBe(0);
+    expect(result.lastLog).toContain('봉인');
+  });
+
+  it('asks for a forced switch when the floor-100 seal hits the active pathimon', () => {
+    const battle = createBattleState({
+      floor: 100,
+      activeIndex: 0,
+      party: [
+        createMonster({ name: '선두' }),
+        createMonster({ name: '후열' }),
+      ],
+      enemy: createMonster({
+        name: '미생물학 교수 Prof. S',
+        isBoss: true,
+        isTrainer: true,
+        finalBossSkill: 'seal',
+      }),
+    });
+
+    const result = applyFinalBossSkill(battle, () => 0);
+
+    expect(result.activeIndex).toBe(0);
+    expect(result.party[0].sealedByBoss).toBe(true);
+    expect(result.phase).toBe('forcedSwitch');
+    expect(result.lastLog).toContain('다음 패시몬');
+  });
+
   it('can resolve dyspnea as a turn-end instant collapse chance', () => {
     const monster = createMonster({
       hp: 30,

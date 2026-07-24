@@ -19,7 +19,7 @@ describe('scene cleanup lifecycle wiring', () => {
 
     expect(battleSceneSource).not.toContain('BATTLE_ACTION_HOLD_MS');
     expect(battleSceneSource).toContain('const BATTLE_STATUS_HOLD_MS = 1000;');
-    expect(battleSceneSource).toContain("type BattleMessageStage = 'preparation' | 'combat' | 'status';");
+    expect(battleSceneSource).toContain("type BattleMessageStage = 'preparation' | 'combat' | 'status' | 'dialogue';");
     expect(combatStage).not.toContain('delayedCall');
     expect(battleSceneSource).toMatch(/showStatusMessage\(\)[\s\S]*?playStatusDamageCue/);
     expect(battleSceneSource).toMatch(/showStatusMessage\(\)[\s\S]*?delayedCall\(BATTLE_STATUS_HOLD_MS/);

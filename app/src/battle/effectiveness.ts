@@ -15,6 +15,10 @@ function defenseAbilities(monster: RuntimeMonster): AbilityId[] {
   return activeAbilities.length > 0 ? activeAbilities : ['none'];
 }
 
+function isParasiteCategory(category: string): boolean {
+  return ['기생충', '연충', '선충', '흡충', '조충'].includes(category);
+}
+
 export function calculateMultiplier(
   move: MoveData,
   attacker: RuntimeMonster,
@@ -50,7 +54,12 @@ export function calculateMultiplier(
   let total = typeMultiplier;
 
   for (const ability of abilities) {
-    const resistTag = ABILITIES[ability].resistTag;
+    if (ability === 'parasite_master' && isParasiteCategory(attacker.category)) {
+      total *= 0.5;
+      notes.push('기생충학 마스터가 기생충 타입 공격을 반감했다');
+    }
+
+    const resistTag = ABILITIES[ability]?.resistTag;
 
     if (!resistTag) {
       continue;

@@ -74,7 +74,11 @@ function selectBossAbilities(pool: AbilityId[], floor: number, index: number): A
 
 export function createBossInstance(index = 0, floor = 10): RuntimeMonster {
   const boss = getBoss(index);
-  const abilities = selectBossAbilities(boss.abilityPool, floor, index);
+  const fixedAbilities = boss.fixedAbilities ?? [];
+  const abilities = [
+    ...fixedAbilities,
+    ...selectBossAbilities(boss.abilityPool, floor, index).filter((ability) => !fixedAbilities.includes(ability)),
+  ];
   const maxHp = boss.maxHp * BOSS_HP_MULTIPLIER;
   // 적은 전체 기술 풀을 그대로 들고, 매 턴 chooseBossMove가 ×4/×2/×1 그룹에서 1/3씩 고른다(battle/bossMatchup.ts).
   const moveset = [...boss.movePool];
@@ -102,6 +106,13 @@ export function createBossInstance(index = 0, floor = 10): RuntimeMonster {
     bossMaintenanceQueued: false,
     plannedMoveIds: [],
     bossPhase2Activated: false,
+    bossPhase2Pending: false,
+    encounterDialogue: boss.encounterDialogue ? [...boss.encounterDialogue] : undefined,
+    phase2Dialogue: boss.phase2Dialogue ? [...boss.phase2Dialogue] : undefined,
+    finalBossSkill: boss.finalBossSkill,
+    finalBossSkillName: boss.finalBossSkillName,
+    finalBossSkillAnnouncement: boss.finalBossSkillAnnouncement,
+    finalBossSkillApplied: false,
     effects: [],
     statusConditions: {},
     stunned: false,

@@ -15,8 +15,10 @@ const BOSS_ABILITIES: BossData['abilityPool'] = [
 
 const BOSS_MOVES: BossData['movePool'] = BOSS_ATTACK_MOVE_IDS;
 
+export const LATE_GAME_BOSS_IDS: string[] = ['prof_p', 'prof_s', 'prof_k', 'prof_w'];
+
 // 보스·트레이너는 스탯과 기술 위력을 공유하고 트레이너만 HP를 1/4로 줄인다(state/factory.ts).
-// v2 테스트 결과 공격력 136은 초반부터 과도해, 기술 위력은 유지하고 공격력만 절반으로 되돌린다.
+// v2 테스트 결과 공격력 136은 초반부터 과도해, 기술 위력은 유지하고 공격력을 30으로 낮췄다.
 // 방어 8은 플레이어 화력을 방어 6 대비 25% 낮춰 보스 전투를 길게 만든다.
 export const BOSS_COMBAT_STATS = {
   attack: 30,
@@ -195,19 +197,65 @@ const RAW_BOSSES: BossData[] = [
   ]),
 ];
 
+const PROFESSOR_BOSSES: BossData[] = [
+  {
+    ...createBoss('prof_p', '기생충학 교수 Prof. P', '기생충학 교수 (Professor of Parasitology)', 'P', 258, BOSS_COMBAT_STATS.attack, BOSS_COMBAT_STATS.defense, [
+      '기생충 감별',
+      '생활사 추적',
+      '숙주 반응 관찰',
+    ]),
+    assetPath: 'images/trainers/boss/prof_p.png',
+    fixedAbilities: ['parasite_master'],
+    encounterDialogue: ['기생충은 재미있었나요..?', '하하'],
+    phase2Dialogue: ['해피.. 알사탕.. 연어회.. 칼국수..'],
+  },
+  {
+    ...createBoss('prof_s', '미생물학 교수 Prof. S', '미생물학 교수 (Professor of Microbiology)', 'S', 250, BOSS_COMBAT_STATS.attack, BOSS_COMBAT_STATS.defense, [
+      '배양 관찰',
+      '인형 표본',
+      '미생물 분류',
+    ]),
+    assetPath: 'images/trainers/boss/prof_s.png',
+    encounterDialogue: ['새로운 인형이니..?'],
+    phase2Dialogue: ['One minute...'],
+    finalBossSkill: 'seal',
+    finalBossSkillName: '봉인',
+    finalBossSkillAnnouncement: 'Prof. S는 봉인을 사용한다!',
+  },
+  {
+    ...createBoss('prof_k', '약리학 교수 Prof. K', '약리학 교수 (Professor of Pharmacology)', 'K', 270, BOSS_COMBAT_STATS.attack, BOSS_COMBAT_STATS.defense, [
+      '약물 반응 관찰',
+      '용량 조절',
+      '치료 전략 분석',
+    ]),
+    assetPath: 'images/trainers/boss/prof_k.png',
+  },
+  {
+    ...createBoss('prof_w', '미생물학 교수 Prof. W', '미생물학 교수 (Professor of Microbiology)', 'W', 246, BOSS_COMBAT_STATS.attack, BOSS_COMBAT_STATS.defense, [
+      '신속 배양',
+      '감염원 추적',
+      '공격적 방역',
+    ]),
+    assetPath: 'images/trainers/boss/prof_w.png',
+  },
+];
+
 const RAW_BOSSES_WITH_ASSETS: BossData[] = RAW_BOSSES.map((boss, index) => ({
   ...boss,
   assetPath: bossAssetPath(boss.id, index),
 }));
 
-const USED_BOSS_ASSETS = new Set(RAW_BOSSES_WITH_ASSETS.map((boss) => boss.assetPath));
+const USED_BOSS_ASSETS = new Set([
+  ...RAW_BOSSES_WITH_ASSETS.map((boss) => boss.assetPath),
+  ...PROFESSOR_BOSSES.map((boss) => boss.assetPath),
+]);
 
 const EXTRA_BOSSES: BossData[] = BOSS_CHARACTER_ASSETS
   .filter((assetPath) => !USED_BOSS_ASSETS.has(assetPath))
   .map((assetPath, index) => ({
     id: assetIdFromPath(assetPath),
-    name: `면역 보스 ${index + 1}`,
-    scientificName: `${bossAssetLabel(assetPath)}형 방역 지휘관 (Immune Boss)`,
+    name: `${bossAssetLabel(assetPath)}형 방역 지휘관`,
+    scientificName: `현장 면역 대응관 (Immune Response Commander ${index + 1})`,
     category: '보스 사람',
     glyph: 'BOSS',
     assetPath,
@@ -219,7 +267,9 @@ const EXTRA_BOSSES: BossData[] = BOSS_CHARACTER_ASSETS
     symptoms: ['전신 염증', '면역 반응', '감염 대응'],
   }));
 
-export const BOSSES: BossData[] = [...RAW_BOSSES_WITH_ASSETS, ...EXTRA_BOSSES].map((boss) => ({
+const REGULAR_BOSSES: BossData[] = [...RAW_BOSSES_WITH_ASSETS, ...EXTRA_BOSSES];
+
+export const BOSSES: BossData[] = [...REGULAR_BOSSES, ...PROFESSOR_BOSSES].map((boss) => ({
   ...boss,
   attack: BOSS_COMBAT_STATS.attack,
   defense: BOSS_COMBAT_STATS.defense,
@@ -243,17 +293,24 @@ function shuffled<T>(items: T[], random: RandomSource): T[] {
 export function createBossRosterIds(random: RandomSource = Math.random, count = 10): string[] {
   const roster: string[] = [];
   let pool: BossData[] = [];
+  const lateGameBosses = count >= 10 ? shuffled(PROFESSOR_BOSSES, random) : [];
+  const regularCount = Math.max(0, count - lateGameBosses.length);
 
-  while (roster.length < count && BOSSES.length > 0) {
+  while (roster.length < regularCount && REGULAR_BOSSES.length > 0) {
     if (pool.length === 0) {
-      pool = shuffled(BOSSES, random);
+      pool = shuffled(REGULAR_BOSSES, random);
     }
 
     const boss = pool.shift();
     if (boss) roster.push(boss.id);
   }
 
-  return roster;
+  return [
+    ...roster,
+    ...lateGameBosses
+      .slice(0, Math.max(0, count - roster.length))
+      .map((boss) => boss.id),
+  ];
 }
 
 export function bossIndexById(bossId: string): number | undefined {

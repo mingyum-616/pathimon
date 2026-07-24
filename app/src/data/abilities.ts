@@ -72,6 +72,11 @@ export const ABILITIES: Record<AbilityId, AbilityData> = {
     name: '면역조절',
     description: '면역매개 기술 피해를 0.5배로 줄입니다.',
   },
+  parasite_master: {
+    id: 'parasite_master',
+    name: '기생충학 마스터',
+    description: '기생충 타입 패시몬에게 받는 직접 피해를 0.5배로 줄입니다.',
+  },
   mask: {
     id: 'mask',
     name: '점액섬모',
