@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { capsuleCanCatch } from './capsules';
+import { capsuleCanCatch, capsuleOrderForMode } from './capsules';
 import type { RuntimeMonster } from '../types/game';
 
 function enemyWithCategory(category: string): RuntimeMonster {
@@ -26,6 +26,19 @@ function enemyWithCategory(category: string): RuntimeMonster {
 }
 
 describe('capsule type matching', () => {
+  it('shows only the universal capsule in learning mode', () => {
+    expect(capsuleOrderForMode('learning')).toEqual(['universal']);
+    expect(capsuleOrderForMode('challenge')).toEqual([
+      'universal',
+      'virus',
+      'bacteria',
+      'parasite',
+      'fungus',
+      'protozoa',
+      'prion',
+    ]);
+  });
+
   it('treats bacterial subtype labels as bacteria capsule targets', () => {
     expect(capsuleCanCatch('bacteria', enemyWithCategory('세균'))).toBe(true);
     expect(capsuleCanCatch('bacteria', enemyWithCategory('세균 병원형'))).toBe(true);

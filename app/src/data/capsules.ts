@@ -1,6 +1,10 @@
-import type { CapsuleId, CapsuleInventory, RuntimeMonster } from '../types/game';
+import type { CapsuleId, CapsuleInventory, RunMode, RuntimeMonster } from '../types/game';
 
 export const CAPSULE_ORDER: CapsuleId[] = ['universal', 'virus', 'bacteria', 'parasite', 'fungus', 'protozoa', 'prion'];
+
+export function capsuleOrderForMode(mode: RunMode): CapsuleId[] {
+  return mode === 'learning' ? ['universal'] : [...CAPSULE_ORDER];
+}
 
 export const CAPSULE_LABELS: Record<CapsuleId, string> = {
   universal: '만능 캡슐',

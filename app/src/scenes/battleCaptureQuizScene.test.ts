@@ -27,6 +27,14 @@ describe('BattleScene capture quiz and first trainer guidance', () => {
     expect(battleSceneSource).toContain('자세히 보기');
   });
 
+  it('keeps next floor primary and places optional details below it', () => {
+    expect(battleSceneSource).toContain("'다음 층', () => this.goNextFloor()");
+    expect(battleSceneSource).toMatch(
+      /drawMenuButton\(780,\s*500,\s*160,\s*34,\s*detailButtonLabel/,
+    );
+    expect(battleSceneSource).not.toContain('`자세히 보기\\n${detail}`');
+  });
+
   it('plays the stat-up cue when a successful switch earns attack rank', () => {
     expect(battleSceneSource).toContain('playAttackRankUpEffect');
     expect(battleSceneSource).toContain('battle_stats');

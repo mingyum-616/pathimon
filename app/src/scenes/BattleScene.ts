@@ -17,7 +17,7 @@ import {
   resolveSwitchMonster,
 } from '../battle/turn';
 import { createBossRosterIds } from '../data/bosses';
-import { CAPSULE_LABELS, CAPSULE_ORDER } from '../data/capsules';
+import { CAPSULE_LABELS, CAPSULE_ORDER, capsuleOrderForMode } from '../data/capsules';
 import {
   conciseLearningFeedback,
   pickCaptureQuiz,
@@ -369,7 +369,9 @@ export class BattleScene extends Phaser.Scene {
       && this.viewMode !== 'captureQuiz'
       && !this.showFirstTrainerGuide
     ) {
-      this.drawMobileOverlay();
+      if (this.state.phase !== 'floorClear') {
+        this.drawMobileOverlay();
+      }
     }
   }
 
@@ -995,7 +997,7 @@ export class BattleScene extends Phaser.Scene {
     drawPanel(this, panelX, panelY, 342, 422).setAlpha(0.98);
     addLabel(this, panelX + 28, panelY + 20, '캡슐', 24);
 
-    CAPSULE_ORDER.forEach((capsuleId, index) => {
+    capsuleOrderForMode(this.state.mode).forEach((capsuleId, index) => {
       const count = this.capsuleCountLabel(capsuleId);
       this.drawCapsuleRowButton(rowX, rowY + index * 42, 250, 34, capsuleId, `x${count}`, CAPSULE_LABELS[capsuleId], () => {
         this.capsuleCursor = index;
@@ -2168,8 +2170,9 @@ export class BattleScene extends Phaser.Scene {
 
   private moveCapsuleCursor(direction: Direction): void {
     if (direction !== 'up' && direction !== 'down') return;
+    const capsuleIds = capsuleOrderForMode(this.state.mode);
     this.capsuleCursor += direction === 'down' ? 1 : -1;
-    this.capsuleCursor = Math.min(CAPSULE_ORDER.length - 1, Math.max(0, this.capsuleCursor));
+    this.capsuleCursor = Math.min(capsuleIds.length - 1, Math.max(0, this.capsuleCursor));
   }
 
   private moveStatusMoveCursor(direction: Direction): void {
@@ -2226,7 +2229,7 @@ export class BattleScene extends Phaser.Scene {
     }
 
     if (this.state.phase === 'floorClear') {
-      this.advanceFloorClearPage();
+      this.goNextFloor();
       return;
     }
 
@@ -2268,7 +2271,8 @@ export class BattleScene extends Phaser.Scene {
     } else if (this.viewMode === 'moves') {
       this.handleMovePress(this.selectedMoveId);
     } else if (this.viewMode === 'capsules') {
-      this.handleCapsuleThrow(CAPSULE_ORDER[this.capsuleCursor]);
+      const capsuleIds = capsuleOrderForMode(this.state.mode);
+      this.handleCapsuleThrow(capsuleIds[this.capsuleCursor]);
     }
   }
 
@@ -2454,11 +2458,15 @@ export class BattleScene extends Phaser.Scene {
       minSize: 9,
       maxLines: 5,
     }).setAlpha(0.9);
-    const hasNextPage = pageIndex < pages.length - 1;
-    const buttonLabel = hasNextPage
-      ? (pageIndex === 0 ? '자세히 보기' : `다음 내용 ${pageIndex + 2}/${pages.length}`)
-      : '다음 층';
-    this.drawMenuButton(780, 444, 160, 48, buttonLabel, () => this.advanceFloorClearPage());
+    this.drawMenuButton(780, 444, 160, 48, '다음 층', () => this.goNextFloor());
+    if (pages.length > 1) {
+      const detailButtonLabel = pageIndex === 0
+        ? '자세히 보기'
+        : pageIndex < pages.length - 1
+          ? `다음 내용 ${pageIndex + 2}/${pages.length}`
+          : '핵심만 보기';
+      this.drawMenuButton(780, 500, 160, 34, detailButtonLabel, () => this.advanceFloorClearDetail());
+    }
   }
 
   private floorClearBody(): string {
@@ -2494,7 +2502,7 @@ export class BattleScene extends Phaser.Scene {
           5,
         );
         const detailPages = paginateWrappedTextBlocks(
-          wrapParagraphs([`자세히 보기\n${detail}`]),
+          wrapParagraphs([detail]),
           5,
         );
         return [...summaryPages, ...detailPages];
@@ -2504,14 +2512,14 @@ export class BattleScene extends Phaser.Scene {
     return paginateWrappedTextBlocks(wrapParagraphs(paragraphs), 5);
   }
 
-  private advanceFloorClearPage(): void {
+  private advanceFloorClearDetail(): void {
     const pages = this.floorClearPages();
     if (this.floorClearPage < pages.length - 1) {
       this.floorClearPage += 1;
-      this.render();
-      return;
+    } else {
+      this.floorClearPage = 0;
     }
-    this.goNextFloor();
+    this.render();
   }
 
   private drawDefeatView(): void {
