@@ -18,8 +18,7 @@ import {
 } from '../battle/turn';
 import { createBossRosterIds } from '../data/bosses';
 import { CAPSULE_LABELS, CAPSULE_ORDER } from '../data/capsules';
-import { MONSTERS } from '../data/monsters';
-import { createCaptureQuiz, type CaptureQuiz } from '../game/learning';
+import { pickCaptureQuiz, type CaptureQuiz } from '../game/learning';
 import { advanceFromShop, createInitialRunState, encounterKindForFloor, enterBattle } from '../state/runState';
 import type { CapsuleId, HitEffectiveness, MoveId, RunState, RuntimeMonster } from '../types/game';
 import { COLORS, APP_WIDTH, APP_HEIGHT } from '../game/constants';
@@ -127,6 +126,8 @@ export class BattleScene extends Phaser.Scene {
   private floorClearPage = 0;
   private captureQuiz?: CaptureQuiz;
   private captureQuizCursor = 0;
+  // O/X 답 후 해설(근거 학습포인트)을 보여주는 단계. 있으면 판정 대기 상태.
+  private captureQuizResult?: { correct: boolean; answer: boolean; explain: string };
   private showFirstTrainerGuide = false;
 
   constructor() {
@@ -164,6 +165,7 @@ export class BattleScene extends Phaser.Scene {
     this.floorClearPage = 0;
     this.captureQuiz = undefined;
     this.captureQuizCursor = 0;
+    this.captureQuizResult = undefined;
     this.showFirstTrainerGuide = this.state.floor === 5 && this.state.encounterKind === 'trainer';
   }
 
@@ -695,6 +697,7 @@ export class BattleScene extends Phaser.Scene {
 
   private drawCaptureQuizView(enemy: RuntimeMonster): void {
     const quiz = this.captureQuiz;
+    const result = this.captureQuizResult;
     addLabel(this, 34, 406, `${enemy.name}이 질문을 던진다...`, 22).setColor('#72d6ff');
     addBoxLabel(this, 36, 446, quiz?.statement ?? '질문을 불러오는 중입니다.', {
       width: 670,
@@ -703,6 +706,25 @@ export class BattleScene extends Phaser.Scene {
       minSize: 13,
       maxLines: 3,
     }).setLineSpacing(5);
+
+    if (result) {
+      const verdict = result.correct ? '맞았다!' : '틀렸다.';
+      const answerLabel = result.answer ? 'O (맞는 설명)' : 'X (틀린 설명)';
+      addLabel(this, 36, 522, `${verdict}  정답: ${answerLabel}`, 15)
+        .setColor(result.correct ? '#8ef0a6' : '#ff9a8d');
+      if (result.explain) {
+        addBoxLabel(this, 36, 546, `실제로는 — ${result.explain}`, {
+          width: 700,
+          height: 62,
+          size: 14,
+          minSize: 11,
+          maxLines: 4,
+        }).setAlpha(0.9);
+      }
+      this.drawMenuButton(788, 452, 160, 62, '계속', () => this.dismissCaptureQuizResult(), true);
+      return;
+    }
+
     addBoxLabel(this, 36, 524, '이 패시몬에 대한 올바른 설명일까?', {
       width: 470,
       height: 22,
@@ -2056,9 +2078,11 @@ export class BattleScene extends Phaser.Scene {
     }
 
     if (this.viewMode === 'captureQuiz') {
-      if (direction === 'left') this.captureQuizCursor = 0;
-      if (direction === 'right') this.captureQuizCursor = 1;
-      this.render();
+      if (!this.captureQuizResult) {
+        if (direction === 'left') this.captureQuizCursor = 0;
+        if (direction === 'right') this.captureQuizCursor = 1;
+        this.render();
+      }
       return;
     }
 
@@ -2185,7 +2209,11 @@ export class BattleScene extends Phaser.Scene {
     }
 
     if (this.viewMode === 'captureQuiz') {
-      this.handleCaptureQuizAnswer(this.captureQuizCursor === 0);
+      if (this.captureQuizResult) {
+        this.dismissCaptureQuizResult();
+      } else {
+        this.handleCaptureQuizAnswer(this.captureQuizCursor === 0);
+      }
       return;
     }
 
@@ -2304,8 +2332,9 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    this.captureQuiz = createCaptureQuiz(enemy, MONSTERS, Math.random);
+    this.captureQuiz = pickCaptureQuiz(enemy, Math.random);
     this.captureQuizCursor = 0;
+    this.captureQuizResult = undefined;
     this.isAnimating = true;
     this.playCapsuleThrow(capsuleId, () => {
       this.isAnimating = false;
@@ -2349,13 +2378,29 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private handleCaptureQuizAnswer(answer: boolean): void {
-    if (!this.captureQuiz || this.isAnimating) return;
+    if (!this.captureQuiz || this.captureQuizResult || this.isAnimating) return;
 
     const correct = answer === this.captureQuiz.answer;
+    // 바로 판정하지 않는다. 먼저 해설(근거 학습포인트)을 보여준다.
+    // 거짓(X) 문항이면 참문장으로 오개념을 즉시 교정한다.
+    this.captureQuizResult = {
+      correct,
+      answer: this.captureQuiz.answer,
+      explain: this.captureQuiz.explain ?? '',
+    };
+    this.render();
+  }
+
+  private dismissCaptureQuizResult(): void {
+    const result = this.captureQuizResult;
+    if (!result || this.isAnimating) return;
+
+    const correct = result.correct;
     const previousState = this.state;
     this.state = resolveCaptureQuizAnswer(this.state, correct, Math.random());
     this.notice = this.state.battleResultLog ?? this.state.lastLog;
     this.captureQuiz = undefined;
+    this.captureQuizResult = undefined;
 
     if (!correct) {
       this.viewMode = this.state.phase === 'forcedSwitch' ? 'party' : 'command';

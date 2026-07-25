@@ -30,16 +30,10 @@ export function randomLearningPoint(
 
 type LearningMonster = Pick<RuntimeMonster, 'profileMemo' | 'movePointMap'> | undefined;
 
-interface CaptureQuizMonster {
-  id?: string;
-  name: string;
-  profileMemo?: string[];
-  templateId?: string;
-}
-
 export interface CaptureQuiz {
   answer: boolean;
   statement: string;
+  explain?: string;
 }
 
 function quizStatement(text: string): string {
@@ -48,27 +42,29 @@ function quizStatement(text: string): string {
     .trim();
 }
 
-export function createCaptureQuiz(
-  target: CaptureQuizMonster,
-  catalog: CaptureQuizMonster[],
+type CaptureQuizSource = Pick<RuntimeMonster, 'name' | 'captureQuiz' | 'profileMemo'> | undefined;
+
+// 포획 OX 퀴즈를 고른다. 노트 저작 항목(`포획 OX:`)이 있으면 무작위 1개를 낸다.
+// 없으면 **자기 학습포인트 1개를 정답 O 문항으로** 폴백한다(저작 이행기 한정).
+// 이전 방식(타 병원체 학습포인트를 오답으로 뽑던 createCaptureQuiz)은 폐기했다.
+// 공통 병독인자·치료제·같은 속 문장이 대상에게도 참인데 X로 강제돼 오정보를 정답으로 만들었기 때문이다.
+export function pickCaptureQuiz(
+  monster: CaptureQuizSource,
   random: () => number = Math.random,
 ): CaptureQuiz {
-  const targetPoints = target.profileMemo?.filter((line) => quizStatement(line).length > 0) ?? [];
-  const targetId = target.templateId ?? target.id;
-  const decoys = catalog.filter((monster) => (
-    (monster.templateId ?? monster.id) !== targetId
-    && monster.profileMemo?.some((line) => quizStatement(line).length > 0)
-  ));
-  const useTarget = random() < 0.5 || decoys.length === 0;
-  const source = useTarget
-    ? target
-    : decoys[Math.min(decoys.length - 1, Math.floor(random() * decoys.length))];
-  const points = source.profileMemo?.filter((line) => quizStatement(line).length > 0) ?? targetPoints;
-  const point = points[Math.min(points.length - 1, Math.max(0, Math.floor(random() * points.length)))] ?? '';
+  const authored = monster?.captureQuiz ?? [];
+  if (authored.length > 0) {
+    const index = Math.min(authored.length - 1, Math.max(0, Math.floor(random() * authored.length)));
+    const item = authored[index]!;
+    return { statement: item.statement, answer: item.answer, explain: item.explain };
+  }
 
+  const point = randomLearningPoint(monster, random);
+  const statement = point ? quizStatement(point) : '';
   return {
-    answer: useTarget,
-    statement: quizStatement(point) || `${target.name}은 현재 분류와 일치하는 특징을 가진다.`,
+    statement: statement || `${monster?.name ?? '이 패시몬'}은 현재 분류와 일치하는 특징을 가진다.`,
+    answer: true,
+    explain: statement,
   };
 }
 

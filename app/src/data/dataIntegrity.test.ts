@@ -632,3 +632,43 @@ describe('Pathimon data', () => {
     }
   });
 });
+
+describe('capture OX quiz authoring', () => {
+  const withQuiz = NOTE_MONSTERS.filter((monster) => (monster.captureQuiz?.length ?? 0) > 0);
+
+  function memoLineForL(memo: string[], l: number): string | undefined {
+    return memo.find((line) => new RegExp(`^L${l}\\b`).test(line));
+  }
+
+  // 전종 저작 완료 → "활성 전종 필수"로 강화됐다. 새 노트는 포획 OX를 반드시 저작해야 한다
+  // (미저작 시 런타임은 안전 폴백으로 동작하지만 이 테스트가 실패한다).
+  it('every active pathimon has an authored capture OX (full coverage)', () => {
+    const missing = NOTE_MONSTERS.filter((monster) => (monster.captureQuiz?.length ?? 0) === 0).map((monster) => monster.name);
+    expect(missing, `포획 OX 미저작: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('follows composition rules: 4~5 items, mixed O/X, >=1 direct-treatment, valid 근거 L#', () => {
+    for (const monster of withQuiz) {
+      const quiz = monster.captureQuiz!;
+      const memo = monster.profileMemo ?? [];
+
+      expect(quiz.length, `${monster.name} 문항 수`).toBeGreaterThanOrEqual(4);
+      expect(quiz.length, `${monster.name} 문항 수`).toBeLessThanOrEqual(5);
+      expect(quiz.some((item) => item.answer === true), `${monster.name} 참(O) 문항 필요`).toBe(true);
+      expect(quiz.some((item) => item.answer === false), `${monster.name} 거짓(X) 문항 필요`).toBe(true);
+
+      for (const item of quiz) {
+        expect(memoLineForL(memo, item.sourceL), `${monster.name} 근거 L${item.sourceL} 존재`).toBeTruthy();
+        expect(item.explain.length, `${monster.name} 해설(L${item.sourceL})`).toBeGreaterThan(0);
+      }
+
+      // 직접처치 OX ≥1 — 근거가 `[치료]` 학습포인트인 문항.
+      // 단 `[치료]` 학습포인트가 아예 없는 노트(치료가 `대처법`에만 있는 상위형)는 면제한다.
+      const hasTreatmentPoint = memo.some((line) => line.includes('[치료]'));
+      if (hasTreatmentPoint) {
+        const hasTreatmentOX = quiz.some((item) => memoLineForL(memo, item.sourceL)?.includes('[치료]') ?? false);
+        expect(hasTreatmentOX, `${monster.name} 직접처치 OX(>=1) 필요`).toBe(true);
+      }
+    }
+  });
+});

@@ -209,6 +209,15 @@ export interface MoveData {
   targetTags?: string[];
 }
 
+// 포획 OX 퀴즈 한 문항. 노트의 `포획 OX:` 섹션에서 파싱한다.
+// answer: O=true, X=false. explain: 근거 학습포인트(L#) 원문 — 답한 뒤 해설로 보여준다.
+export interface CaptureQuizItem {
+  statement: string;
+  answer: boolean;
+  explain: string;
+  sourceL: number;
+}
+
 export interface MonsterData {
   id: string;
   name: string;
@@ -228,6 +237,8 @@ export interface MonsterData {
   profileMemo?: string[];
   // 기술 사용 시 맥락 학습을 위해, 기술 → profileMemo 인덱스 매핑(노트 `기술↔학습포인트 대응`).
   movePointMap?: Record<MoveId, number[]>;
+  // 야생 포획 시 내는 OX 퀴즈(노트 `포획 OX:`). 종당 4~5문항.
+  captureQuiz?: CaptureQuizItem[];
   countermeasures?: CountermeasureProfile;
   prep?: MoveId;
   signature?: MoveId;
@@ -324,6 +335,8 @@ export interface RuntimeMonster {
   profileMemo?: string[];
   // 기술 사용 시 맥락 학습을 위해, 기술 → profileMemo 인덱스 매핑(노트 `기술↔학습포인트 대응`).
   movePointMap?: Record<MoveId, number[]>;
+  // 야생 포획 시 내는 OX 퀴즈(노트 `포획 OX:`). 종당 4~5문항.
+  captureQuiz?: CaptureQuizItem[];
   countermeasures?: CountermeasureProfile;
   effects: ActiveEffect[];
   statusConditions?: StatusConditionStacks;

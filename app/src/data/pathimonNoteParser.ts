@@ -1,6 +1,7 @@
 import type {
   AbilityId,
   AttackType,
+  CaptureQuizItem,
   CountermeasureProfile,
   EffectPrimitive,
   MonsterData,
@@ -516,6 +517,53 @@ function buildMovePointMap(
   }
 
   return map;
+}
+
+// 학습포인트 `L4 [기전] …`에서 `L4 [기전]` 접두어를 떼어 본문만 남긴다(해설 표기용).
+function stripLearningPrefix(line: string): string {
+  return line.replace(/^L\d+\s*(?:\[[^\]]+\])?\s*/, '').trim();
+}
+
+// `포획 OX:` 섹션의 `- 문장 | O/X | L#`를 파싱한다.
+// 근거 L#은 그 노트 학습포인트의 원문(해설)으로 해석한다. 형식 오류는 빌드 시 던진다.
+function buildCaptureQuiz(noteText: string, memo: string[], noteName: string): CaptureQuizItem[] {
+  const lines = sectionLines(normalizeLines(noteText), '포획 OX');
+  const lToIndex = memoIndexByL(memo);
+  const items: CaptureQuizItem[] = [];
+
+  for (const raw of lines) {
+    const trimmed = raw.trim();
+    if (!trimmed.startsWith('- ')) continue;
+    const body = trimmed.slice(2).trim();
+    if (!body) continue;
+
+    const parts = body.split('|').map((token) => token.trim());
+    if (parts.length !== 3) {
+      throw new Error(`[${noteName}] 포획 OX 형식 오류(문장 | O/X | L#): ${body}`);
+    }
+    const [statement, answerToken, lToken] = parts;
+    if (answerToken !== 'O' && answerToken !== 'X') {
+      throw new Error(`[${noteName}] 포획 OX 정답은 O/X여야 함: ${body}`);
+    }
+    const lMatch = lToken.match(/^L(\d+)$/);
+    if (!lMatch) {
+      throw new Error(`[${noteName}] 포획 OX 근거는 L숫자여야 함: ${body}`);
+    }
+    const sourceL = Number(lMatch[1]);
+    const memoIndex = lToIndex.get(sourceL);
+    if (memoIndex === undefined) {
+      throw new Error(`[${noteName}] 포획 OX 근거 ${lToken}이 학습포인트에 없음: ${body}`);
+    }
+
+    items.push({
+      statement,
+      answer: answerToken === 'O',
+      explain: stripLearningPrefix(memo[memoIndex] ?? ''),
+      sourceL,
+    });
+  }
+
+  return items;
 }
 
 function normalizeTerm(term: string): string {
@@ -1037,6 +1085,10 @@ export function buildPathimonFromNote(noteText: string, options: PathimonNoteBui
       learnset: moveEntries.map(([moveId]) => moveId),
       profileMemo: note.memo,
       movePointMap: buildMovePointMap(noteText, note.memo, moveEntries),
+      captureQuiz: (() => {
+        const quiz = buildCaptureQuiz(noteText, note.memo, note.name);
+        return quiz.length > 0 ? quiz : undefined;
+      })(),
       countermeasures: note.countermeasures,
       prep,
       signature,

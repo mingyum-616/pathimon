@@ -201,6 +201,59 @@ describe('pathimon note parser v2 schema', () => {
     expect(built.monster.countermeasures?.symptomTags).not.toContain('손씻기');
   });
 
+  it('parses 포획 OX into capture quiz items and resolves 근거 L# to the learning-point text', () => {
+    const note = `이름: 퀴즈몬
+학명: 퀴즈균(Quiz pathogen)
+타입: 세균
+태그:
+- structure: 그람음성
+- location: 장관
+- pathway: 소화기
+
+학습포인트:
+- L1 [감별점] 퀴즈균은 그람음성 막대균이다.
+- L2 [치료] 스트렙토마이신으로 치료한다.
+
+포획 OX:
+- 퀴즈균은 그람양성 막대균이다. | X | L1
+- 퀴즈균은 스트렙토마이신으로 치료한다. | O | L2
+
+대처법:
+- 1차: 스트렙토마이신 | 계열: 단백합성억제 | 기전: 30S 리보솜 | 표적 태그: 그람음성
+증상/태그: 그람음성, 복통
+
+능력치:
+- 공격: 50   # 밴드: 3   근거: 테스트
+- 방어: 50   # 밴드: 3   근거: 테스트
+- HP: 80     # 밴드: 3   근거: 테스트
+
+기술:
+- 이름: 정착
+  종류: 준비기
+  타입: 준비
+  위력: 0
+  명중: 100%
+  effect: —
+  description: {name}이 정착한다.
+  learnText: 정착을 배운다.
+  결과:
+    - 확률: 100%
+      단계: —
+      위력: —
+      효과: 공격 +1랭크
+      상태이상: —
+      증상: —
+      effect: —
+      description: {name}이 정착했다.
+      learnText: 정착했다.
+`;
+    const built = buildPathimonFromNote(note, baseOptions('test_capture_ox'));
+    expect(built.monster.captureQuiz).toEqual([
+      { statement: '퀴즈균은 그람양성 막대균이다.', answer: false, explain: '퀴즈균은 그람음성 막대균이다.', sourceL: 1 },
+      { statement: '퀴즈균은 스트렙토마이신으로 치료한다.', answer: true, explain: '스트렙토마이신으로 치료한다.', sourceL: 2 },
+    ]);
+  });
+
   it('splits ·-joined regimens and strips the N제 suffix so each drug matches', () => {
     const note = `이름: 결핵테스트
 학명: 결핵테스트균(Tuberculosis test)

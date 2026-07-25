@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RuntimeMonster } from '../types/game';
 import {
   conciseLearningFeedback,
-  createCaptureQuiz,
+  pickCaptureQuiz,
   contextualLearningPoint,
   leftoverLearningPoints,
   randomLearningPoint,
@@ -98,27 +98,32 @@ describe('learning points', () => {
     expect(feedback).not.toContain('**');
   });
 
-  it('builds an O quiz from the encountered pathimon learning text', () => {
-    const target = monsterWithLearningPoints(['L1 [감별점] 대상 패시몬의 실제 특징이다.']);
-    const decoy = monsterWithLearningPoints(['L1 [감별점] 다른 패시몬의 특징이다.']);
-    decoy.templateId = 'decoy';
-    decoy.name = '다른몬';
+  it('picks an authored capture OX item (O/X with explanation)', () => {
+    const monster = monsterWithLearningPoints(['L1 [감별점] 그람음성 막대균이다.']);
+    monster.captureQuiz = [
+      { statement: '이 균은 그람양성이다.', answer: false, explain: '그람음성 막대균이다.', sourceL: 1 },
+      { statement: '이 균은 그람음성 막대균이다.', answer: true, explain: '그람음성 막대균이다.', sourceL: 1 },
+    ];
 
-    expect(createCaptureQuiz(target, [target, decoy], () => 0)).toEqual({
+    expect(pickCaptureQuiz(monster, () => 0)).toEqual({
+      statement: '이 균은 그람양성이다.',
+      answer: false,
+      explain: '그람음성 막대균이다.',
+    });
+    expect(pickCaptureQuiz(monster, () => 0.9)).toEqual({
+      statement: '이 균은 그람음성 막대균이다.',
       answer: true,
-      statement: '대상 패시몬의 실제 특징이다.',
+      explain: '그람음성 막대균이다.',
     });
   });
 
-  it('builds an X quiz from another pathimon learning text', () => {
-    const target = monsterWithLearningPoints(['L1 [감별점] 대상 패시몬의 실제 특징이다.']);
-    const decoy = monsterWithLearningPoints(['L2 [기전] 다른 패시몬의 특징이다.']);
-    decoy.templateId = 'decoy';
-    decoy.name = '다른몬';
-
-    expect(createCaptureQuiz(target, [target, decoy], () => 0.9)).toEqual({
-      answer: false,
-      statement: '다른 패시몬의 특징이다.',
+  it('falls back to a safe self-O statement (no cross-pathogen decoys) when no OX is authored', () => {
+    const monster = monsterWithLearningPoints(['L1 [감별점] 대상 패시몬의 실제 특징이다.']);
+    // 저작된 포획 OX가 없으면 자기 학습포인트를 정답 O로만 낸다 — 타 병원체 오답 강제(오정보) 불가.
+    expect(pickCaptureQuiz(monster, () => 0)).toEqual({
+      statement: '대상 패시몬의 실제 특징이다.',
+      answer: true,
+      explain: '대상 패시몬의 실제 특징이다.',
     });
   });
 });

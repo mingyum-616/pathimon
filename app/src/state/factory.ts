@@ -44,6 +44,7 @@ export function createMonsterInstance(data: MonsterData, options: CreateMonsterO
     bossPhase2Activated: false,
     profileMemo: data.profileMemo ? [...data.profileMemo] : undefined,
     movePointMap: data.movePointMap,
+    captureQuiz: data.captureQuiz ? data.captureQuiz.map((item) => ({ ...item })) : undefined,
     countermeasures: data.countermeasures ? {
       direct: [...data.countermeasures.direct],
       symptomTags: [...data.countermeasures.symptomTags],
