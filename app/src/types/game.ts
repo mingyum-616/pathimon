@@ -282,6 +282,7 @@ export interface TrainerData {
 
 export interface ActiveEffect {
   kind: EffectPrimitive['kind'] | 'confusion';
+  source?: 'switch';
   stat?: 'attack' | 'defense';
   status?: 'confusion' | 'stun';
   pct?: number;
@@ -419,6 +420,7 @@ export interface RunState {
     stat: 'attack';
     target: 'player';
   };
+  pendingSwitchAttackReward?: boolean;
   shopInventory?: ShopItem[];
   shopRefreshCount?: number;
 }

@@ -19,6 +19,12 @@ describe('game guide UI content', () => {
     expect(text).toContain('패시몬의 기술은 준비기, 공격기');
     expect(text).toContain('두 가지 처치를 예고하고 사용합니다.');
     expect(text).toContain('상대가 예고한 처치와 내 패시몬을 비교하여 교체 타이밍을 잡는 것이 중요합니다.');
+    expect(text).toContain('교체해도 턴을 소비하지 않습니다.');
+    expect(text).toContain('공격 +1');
+    expect(text).toContain('최대 +2');
+    expect(text).toContain('OX 퀴즈를 맞히면 포획에 확정적으로 성공합니다.');
+    expect(text).toContain('학습모드 20%');
+    expect(text).toContain('도전모드 40%');
     expect(text).not.toContain('대처 기술');
     expect(text).not.toContain('봉인');
 

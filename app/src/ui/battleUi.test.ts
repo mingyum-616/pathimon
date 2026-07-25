@@ -348,7 +348,7 @@ describe('battle UI helpers', () => {
     });
 
     expect(formatMoveDetailSections('spore_germination', monster, () => 0.99).learnText)
-      .toBe('학습: L2 [기전] 두 번째 학습포인트');
+      .toBe('학습: 두 번째 학습포인트');
   });
 
   it('formats status profile memo lines from pathimon note data', () => {

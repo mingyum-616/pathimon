@@ -1,7 +1,11 @@
 import type { MoveId, RuntimeMonster } from '../types/game';
 
 export function sanitizeLearningText(text: string): string {
-  return text.replace(/\*/g, '').replace(/\s+/g, ' ').trim();
+  return text
+    .replace(/\*/g, '')
+    .replace(/^L\d+\s*(?:\[[^\]]+\])?\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function conciseLearningFeedback(text: string, maxLength = 140): string {
@@ -37,9 +41,7 @@ export interface CaptureQuiz {
 }
 
 function quizStatement(text: string): string {
-  return sanitizeLearningText(text)
-    .replace(/^L\d+\s*(?:\[[^\]]+\])?\s*/, '')
-    .trim();
+  return sanitizeLearningText(text);
 }
 
 type CaptureQuizSource = Pick<RuntimeMonster, 'name' | 'captureQuiz' | 'profileMemo'> | undefined;
@@ -56,7 +58,11 @@ export function pickCaptureQuiz(
   if (authored.length > 0) {
     const index = Math.min(authored.length - 1, Math.max(0, Math.floor(random() * authored.length)));
     const item = authored[index]!;
-    return { statement: item.statement, answer: item.answer, explain: item.explain };
+    return {
+      statement: sanitizeLearningText(item.statement),
+      answer: item.answer,
+      explain: item.explain ? sanitizeLearningText(item.explain) : undefined,
+    };
   }
 
   const point = randomLearningPoint(monster, random);

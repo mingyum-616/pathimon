@@ -682,7 +682,8 @@ describe('battle engine', () => {
     const learningResult = resolvePlayerMove(learningBattle, 'coagulase', 1);
     const challengeResult = resolvePlayerMove(challengeBattle, 'coagulase', 1);
 
-    expect(learningResult.battleActionLog).toContain('\n학습 피드백: L1 [감별점] 시험용 학습 문구');
+    expect(learningResult.battleActionLog).toContain('\n학습 피드백: 시험용 학습 문구');
+    expect(learningResult.battleActionLog).not.toContain('L1 [감별점]');
     expect(challengeResult.battleActionLog).not.toContain('학습 피드백:');
   });
 
@@ -909,9 +910,10 @@ describe('battle engine', () => {
       }),
     });
 
-    const result = resolveSwitchMonster(battle, 1, 1);
+    const result = resolveSwitchMonster(battle, 1);
 
-    expect(result.party[1].hp).toBeLessThan(100);
+    expect(result.party[1].hp).toBe(100);
+    expect(result.enemy?.plannedMoveIds).toEqual(['m_rx_알벤다졸']);
     expect(result.enemy?.sealedMoveIds ?? []).toEqual([]);
     expect(result.enemy?.bossMaintenanceQueued ?? false).toBe(false);
     expect(result.lastLog).not.toContain('봉인');
@@ -949,10 +951,16 @@ describe('battle engine', () => {
       }),
     });
 
-    const result = resolveSwitchMonster(battle, 1, 1);
+    const switched = resolveSwitchMonster(battle, 1);
 
-    expect(result.battleActionLog).toContain('교체 성공: 예상 피해 ×4 → ×1');
-    expect(result.battleActionLog).toContain('회피몬');
+    expect(switched.party[1].hp).toBe(100);
+    expect(switched.lastLog).toContain('교체 성공: 예상 피해 ×4 → ×1');
+    expect(switched.battleActionLog).toBeUndefined();
+    expect(switched.pendingSwitchAttackReward).toBe(true);
+    expect(switched.enemy?.plannedMoveIds).toEqual(['m_rx_알벤다졸']);
+
+    const result = resolvePlayerMove(switched, 'coagulase', 1, 0, 1);
+
     expect(result.battleActionLog).toContain(`면역챔피언의 ${MOVES['m_rx_알벤다졸'].name}!`);
     expect(result.battleActionLog).not.toContain(`면역챔피언의 ${MOVES.m_interferon.name}!`);
     expect(result.party[1].effects).toContainEqual({
@@ -961,9 +969,61 @@ describe('battle engine', () => {
       pct: 50,
       rank: 1,
       turns: 99,
+      source: 'switch',
     });
     expect(result.battleStatUpCue).toEqual({ stat: 'attack', target: 'player' });
     expect(result.battleActionLog).toContain('공격 +1');
+    expect(result.pendingSwitchAttackReward).toBeUndefined();
+  });
+
+  it('caps the persistent switch reward at attack +2 without limiting move buffs', () => {
+    const target = createMonster({
+      name: '회피몬',
+      hp: 100,
+      maxHp: 100,
+      countermeasures: { direct: [], symptomTags: [] },
+    });
+    target.effects = [
+      { kind: 'buff', stat: 'attack', pct: 50, rank: 1, turns: 99, source: 'switch' },
+      { kind: 'buff', stat: 'attack', pct: 50, rank: 1, turns: 99, source: 'switch' },
+      { kind: 'buff', stat: 'attack', pct: 200, rank: 4, turns: 99 },
+    ];
+    const battle = createBattleState({
+      party: [
+        createMonster({
+          name: '표적몬',
+          hp: 100,
+          maxHp: 100,
+          countermeasures: { direct: ['알벤다졸'], symptomTags: [] },
+        }),
+        target,
+      ],
+      enemy: createMonster({
+        name: '면역챔피언',
+        category: '보스 사람',
+        moveset: ['m_rx_알벤다졸'],
+        plannedMoveId: 'm_rx_알벤다졸',
+        plannedMoveIds: ['m_rx_알벤다졸'],
+        isBoss: true,
+        isTrainer: true,
+        attack: 1,
+        hp: 999,
+        maxHp: 999,
+      }),
+    });
+
+    const switched = resolveSwitchMonster(battle, 1);
+    const result = resolvePlayerMove(switched, 'coagulase', 1, 0, 1);
+    const attackRankBuffs = result.party[1].effects.filter((effect) => (
+      effect.kind === 'buff'
+      && effect.stat === 'attack'
+      && effect.pct === 50
+      && effect.rank === 1
+    ));
+
+    expect(attackRankBuffs).toHaveLength(2);
+    expect(result.party[1].effects.some((effect) => effect.pct === 200 && effect.rank === 4)).toBe(true);
+    expect(result.battleStatUpCue).toBeUndefined();
   });
 
   it('uses two telegraphed boss moves in phase two and both hit the final active pathimon', () => {
@@ -1092,7 +1152,7 @@ describe('battle engine', () => {
       ],
     });
 
-    const result = resolveSwitchMonster(battle, 1, 1);
+    const result = resolveSwitchMonster(battle, 1);
 
     expect(result.activeIndex).toBe(0);
     expect(result.lastLog).toContain('봉인');

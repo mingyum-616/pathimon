@@ -18,7 +18,12 @@ import {
 } from '../battle/turn';
 import { createBossRosterIds } from '../data/bosses';
 import { CAPSULE_LABELS, CAPSULE_ORDER } from '../data/capsules';
-import { pickCaptureQuiz, type CaptureQuiz } from '../game/learning';
+import {
+  conciseLearningFeedback,
+  pickCaptureQuiz,
+  sanitizeLearningText,
+  type CaptureQuiz,
+} from '../game/learning';
 import { advanceFromShop, createInitialRunState, encounterKindForFloor, enterBattle } from '../state/runState';
 import type { CapsuleId, HitEffectiveness, MoveId, RunState, RuntimeMonster } from '../types/game';
 import { COLORS, APP_WIDTH, APP_HEIGHT } from '../game/constants';
@@ -698,42 +703,45 @@ export class BattleScene extends Phaser.Scene {
   private drawCaptureQuizView(enemy: RuntimeMonster): void {
     const quiz = this.captureQuiz;
     const result = this.captureQuizResult;
-    addLabel(this, 34, 406, `${enemy.name}이 질문을 던진다...`, 22).setColor('#72d6ff');
-    addBoxLabel(this, 36, 446, quiz?.statement ?? '질문을 불러오는 중입니다.', {
-      width: 670,
-      height: 72,
-      size: 18,
-      minSize: 13,
-      maxLines: 3,
-    }).setLineSpacing(5);
 
     if (result) {
       const verdict = result.correct ? '맞았다!' : '틀렸다.';
       const answerLabel = result.answer ? 'O (맞는 설명)' : 'X (틀린 설명)';
-      addLabel(this, 36, 522, `${verdict}  정답: ${answerLabel}`, 15)
+      addLabel(this, 34, 406, '정답 해설', 22).setColor('#72d6ff');
+      addLabel(this, 36, 446, `${verdict}  정답: ${answerLabel}`, 17)
         .setColor(result.correct ? '#8ef0a6' : '#ff9a8d');
       if (result.explain) {
-        addBoxLabel(this, 36, 546, `실제로는 — ${result.explain}`, {
+        addBoxLabel(this, 36, 480, result.explain, {
           width: 700,
-          height: 62,
-          size: 14,
+          height: 82,
+          size: 16,
           minSize: 11,
           maxLines: 4,
-        }).setAlpha(0.9);
+        }).setLineSpacing(5).setAlpha(0.9);
       }
       this.drawMenuButton(788, 452, 160, 62, '계속', () => this.dismissCaptureQuizResult(), true);
       return;
     }
 
-    addBoxLabel(this, 36, 524, '이 패시몬에 대한 올바른 설명일까?', {
-      width: 470,
+    addLabel(this, 34, 406, `${enemy.name}이 질문을 던진다...`, 22).setColor('#72d6ff');
+    addLabel(this, 36, 442, '핵심 문장', 14).setAlpha(0.72);
+    addBoxLabel(this, 36, 466, quiz?.statement ?? '질문을 불러오는 중입니다.', {
+      width: 670,
+      height: 64,
+      size: 18,
+      minSize: 13,
+      maxLines: 3,
+    }).setLineSpacing(5);
+    const wrongPenalty = this.state.mode === 'learning' ? 20 : 40;
+    addBoxLabel(this, 36, 536, `O/X 선택 · 오답 시 최대 체력 ${wrongPenalty}% 피해`, {
+      width: 520,
       height: 22,
       size: 14,
       minSize: 11,
       maxLines: 1,
     }).setAlpha(0.78);
-    this.drawMenuButton(746, 448, 92, 70, 'O', () => this.handleCaptureQuizAnswer(true), this.captureQuizCursor === 0);
-    this.drawMenuButton(856, 448, 92, 70, 'X', () => this.handleCaptureQuizAnswer(false), this.captureQuizCursor === 1);
+    this.drawMenuButton(746, 458, 92, 70, 'O', () => this.handleCaptureQuizAnswer(true), this.captureQuizCursor === 0);
+    this.drawMenuButton(856, 458, 92, 70, 'X', () => this.handleCaptureQuizAnswer(false), this.captureQuizCursor === 1);
   }
 
   private drawCommandView(player: RuntimeMonster, enemy: RuntimeMonster): void {
@@ -747,7 +755,7 @@ export class BattleScene extends Phaser.Scene {
       this.notice,
       helperText,
       this.state.floor === 1 && this.state.encounterKind === 'wild'
-        ? '첫 4층에서 파티를 채우면 5층 사람 전투가 훨씬 안정적입니다.'
+        ? '가능한 한 파티를 채워 5층 사람 전투에 대비하세요.'
         : '',
     ).forEach((line, index) => {
       const fontSize = index === 0 ? 24 : index === 1 ? 17 : 15;
@@ -2298,27 +2306,16 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private handlePartySwitch(index: number): void {
-    const previousState = this.state;
     const wasForcedSwitch = this.state.phase === 'forcedSwitch';
     this.state = wasForcedSwitch
       ? resolveForcedSwitchMonster(this.state, index)
-      : resolveSwitchMonster(this.state, index, undefined, Math.random);
+      : resolveSwitchMonster(this.state, index);
     const player = this.state.party[this.state.activeIndex];
     this.selectedMoveId = firstUsableMove(player);
     this.armedMoveId = this.selectedMoveId;
     this.notice = this.state.battleResultLog ?? this.state.lastLog;
     this.viewMode = 'command';
-
-    // 자발적 교체는 적이 새로 나온 패시몬에게 반격한다(resolveSwitchMonster가 적 턴을 처리).
-    // 일반 공격과 똑같이 처리 연출 → 전투 메시지(적이 실제로 쓴 기술)를 보여준 뒤 다음 예고로 넘어간다.
-    // 이 흐름을 건너뛰면 플레이어가 "적의 P!"를 못 보고 곧장 다음 예고 P'만 보게 되어
-    // 예고한 기술과 실제 쓴 기술이 다른 것처럼 느껴진다.
-    // 강제 교체는 적 턴이 없으므로(전투 메시지 없음) 바로 넘어간다.
-    if (wasForcedSwitch) {
-      this.afterBattleAction();
-      return;
-    }
-    this.playBattleResolutionCue(previousState, this.state, () => this.showCombatMessage());
+    this.afterBattleAction();
   }
 
   private handleCapsuleThrow(capsuleId: CapsuleId): void {
@@ -2440,8 +2437,7 @@ export class BattleScene extends Phaser.Scene {
     this.floorClearPage = pageIndex;
     addLabel(this, 34, 410, title, 24);
     if (pages.length > 1) {
-      const learningCodes = [...new Set(body.match(/\bL\d+\b/g) ?? [])];
-      const pageSubject = learningCodes.length === 1 ? learningCodes[0] : '학습 내용';
+      const pageSubject = pageIndex === 0 ? '핵심 한 문장' : '자세히 보기';
       addBoxLabel(this, 608, 416, `${pageSubject} (${pageIndex + 1}/${pages.length})`, {
         width: 116,
         height: 18,
@@ -2459,7 +2455,9 @@ export class BattleScene extends Phaser.Scene {
       maxLines: 5,
     }).setAlpha(0.9);
     const hasNextPage = pageIndex < pages.length - 1;
-    const buttonLabel = hasNextPage ? `다음 내용 ${pageIndex + 2}/${pages.length}` : '다음 층';
+    const buttonLabel = hasNextPage
+      ? (pageIndex === 0 ? '자세히 보기' : `다음 내용 ${pageIndex + 2}/${pages.length}`)
+      : '다음 층';
     this.drawMenuButton(780, 444, 160, 48, buttonLabel, () => this.advanceFloorClearPage());
   }
 
@@ -2467,21 +2465,43 @@ export class BattleScene extends Phaser.Scene {
     const title = `${this.state.floor}층 클리어`;
     const log = this.notice || this.state.lastLog;
     const body = log.startsWith(title) ? log.slice(title.length).trimStart() : log;
-    return stripMarkdownEmphasis(body);
+    return stripMarkdownEmphasis(body)
+      .split(/\n+/)
+      .map((paragraph) => sanitizeLearningText(paragraph))
+      .filter((paragraph) => paragraph.length > 0)
+      .join('\n');
   }
 
   private floorClearPages(body = this.floorClearBody()): string[] {
-    const blocks = body
+    const paragraphs = body
       .split(/\n+/)
       .map((paragraph) => paragraph.trim())
-      .filter((paragraph) => paragraph.length > 0)
-      .map((paragraph) => {
+      .filter((paragraph) => paragraph.length > 0);
+    const wrapParagraphs = (items: string[]): string[][] => items.map((paragraph) => {
         const measure = addLabel(this, -10000, -10000, paragraph, 14).setWordWrapWidth(690, true);
         const wrappedLines = measure.getWrappedText(paragraph);
         measure.destroy();
         return wrappedLines;
       });
-    return paginateWrappedTextBlocks(blocks, 5);
+
+    if (this.state.encounterKind === 'wild' && paragraphs.length > 1) {
+      const encounterResult = paragraphs[0]!;
+      const detail = paragraphs.slice(1).join(' ');
+      const summary = conciseLearningFeedback(detail, 120);
+      if (summary && summary !== detail) {
+        const summaryPages = paginateWrappedTextBlocks(
+          wrapParagraphs([encounterResult, `핵심 한 문장\n${summary}`]),
+          5,
+        );
+        const detailPages = paginateWrappedTextBlocks(
+          wrapParagraphs([`자세히 보기\n${detail}`]),
+          5,
+        );
+        return [...summaryPages, ...detailPages];
+      }
+    }
+
+    return paginateWrappedTextBlocks(wrapParagraphs(paragraphs), 5);
   }
 
   private advanceFloorClearPage(): void {

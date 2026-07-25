@@ -41,13 +41,13 @@ export class GameGuideScene extends Phaser.Scene {
     addLabel(this, 56, 24, content.title, 30);
     addLabel(this, 226, 36, content.subtitle, 15).setAlpha(0.78);
 
-    drawPanel(this, 56, 98, 912, 374).setAlpha(0.96);
+    drawPanel(this, 56, 92, 912, 420).setAlpha(0.96);
     const lineLayout = gameGuideLineLayout();
     content.sections.forEach((section, sectionIndex) => {
       const column = sectionIndex % 2;
       const row = Math.floor(sectionIndex / 2);
       const x = 92 + column * 442;
-      const y = 134 + row * 164;
+      const y = 128 + row * 196;
 
       addLabel(this, x, y, section.title, 20);
       section.lines.forEach((line, lineIndex) => {
@@ -65,12 +65,12 @@ export class GameGuideScene extends Phaser.Scene {
   }
 
   private createContinueButton(label: string): void {
-    const rect = this.add.rectangle(772, 504, 164, 46, COLORS.panelDark).setOrigin(0);
+    const rect = this.add.rectangle(772, 520, 164, 42, COLORS.panelDark).setOrigin(0);
     rect.setStrokeStyle(2, COLORS.line);
     rect.setInteractive({ useHandCursor: true });
     rect.on('pointerover', () => rect.setFillStyle(0x4a405d));
     rect.on('pointerout', () => rect.setFillStyle(COLORS.panelDark));
     rect.on('pointerdown', () => this.scene.start('ModeSelectScene'));
-    addLabel(this, 854, 527, label, 18).setOrigin(0.5);
+    addLabel(this, 854, 541, label, 18).setOrigin(0.5);
   }
 }

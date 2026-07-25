@@ -202,6 +202,7 @@ function setWinState(state: RunState, message: string, _learningDetail?: string,
     battleResultLog,
     shopInventory: shouldOpenShop ? createMaintenanceInventory(state.floor) : undefined,
     shopRefreshCount: shouldOpenShop ? 0 : undefined,
+    pendingSwitchAttackReward: undefined,
   };
 }
 
@@ -646,6 +647,33 @@ function finishBattleRound(
   const actorEffectDamage = tickEffects(actor);
   const enemyEffectDamage = tickEffects(enemy);
   const effectLog = statusDamageLog(actor, actorEffectDamage, enemy, enemyEffectDamage);
+  const pendingSwitchReward = state.pendingSwitchAttackReward;
+  state.pendingSwitchAttackReward = undefined;
+  const switchRewardRanks = actor.effects.reduce((total, effect) => (
+    effect.source === 'switch' && effect.kind === 'buff' && effect.stat === 'attack'
+      ? total + (effect.rank ?? 0)
+      : total
+  ), 0);
+  if (
+    pendingSwitchReward
+    && enemyTurn.hitEffectiveness === 'normal'
+    && actor.hp > 0
+    && switchRewardRanks < 2
+  ) {
+    actor.effects.push({
+      kind: 'buff',
+      stat: 'attack',
+      pct: 50,
+      rank: 1,
+      turns: 99,
+      source: 'switch',
+    });
+    state.battleStatUpCue = { stat: 'attack', target: 'player' };
+    enemyTurn = {
+      ...enemyTurn,
+      log: `${enemyTurn.log}\n\n교체 성공: ${actor.name}의 공격 +1!`,
+    };
+  }
   state.battleActionLog = formatBattleActionLog(state, actorLog, enemyTurn.log, learningText);
   state.battleStatusLog = effectLog || undefined;
   state.battleStatusDamage = effectLog
@@ -777,6 +805,7 @@ export function resolvePlayerMove(
   const learningText = battleLearnText(nextState, resolvedMove);
 
   if (enemy.hp <= 0) {
+    nextState.pendingSwitchAttackReward = undefined;
     nextState.battleActionLog = formatBattleActionLog(nextState, actorLog, '', learningText);
     return setWinState(nextState, defeatedOpponentMessage(enemy), learningDetail);
   }
@@ -814,6 +843,7 @@ export function resolveForcedSwitchMonster(state: RunState, targetIndex: number)
   }
 
   nextState.activeIndex = targetIndex;
+  nextState.pendingSwitchAttackReward = undefined;
   nextState.phase = 'battle';
   if (nextState.enemy && isHumanEnemy(nextState.enemy)) {
     clearPlannedHumanMoves(nextState.enemy);
@@ -826,8 +856,6 @@ export function resolveForcedSwitchMonster(state: RunState, targetIndex: number)
 export function resolveSwitchMonster(
   state: RunState,
   targetIndex: number,
-  variance = randomDamageVariance(),
-  criticalRandom: CriticalRandomSource = noCriticalRandom,
 ): RunState {
   const nextState = cloneState(state);
   nextState.battleStatUpCue = undefined;
@@ -843,6 +871,9 @@ export function resolveSwitchMonster(
   }
 
   const previousActor = nextState.party[nextState.activeIndex];
+  if (isHumanEnemy(enemy) && previousActor) {
+    planHumanMoves(enemy, previousActor, nextState.party, nextState.activeIndex);
+  }
   const previousMultiplier = isHumanEnemy(enemy) && previousActor
     ? announcedTreatmentMultiplier(enemy, previousActor)
     : 1;
@@ -851,49 +882,18 @@ export function resolveSwitchMonster(
     : 1;
   nextState.activeIndex = targetIndex;
   if (nextState.encounterKind === 'wild') {
+    nextState.pendingSwitchAttackReward = undefined;
     nextState.phase = 'battle';
-    nextState.lastLog = `${target.name} switched in.`;
+    nextState.lastLog = `${target.name}이 나왔다.`;
     return nextState;
   }
 
-  if (isHumanEnemy(enemy) && !enemy.plannedMoveIds?.length && !enemy.plannedMoveId) {
-    const currentActor = state.party[state.activeIndex];
-    if (currentActor) planHumanMoves(enemy, currentActor, state.party, state.activeIndex);
-  }
-
-  const enemyLog = resolveEnemyTurn(target, enemy, variance, nextState.party, targetIndex, criticalRandom);
-  let switchLog = previousMultiplier > targetMultiplier
+  nextState.pendingSwitchAttackReward = previousMultiplier > targetMultiplier && targetMultiplier === 1;
+  nextState.lastLog = previousMultiplier > targetMultiplier
     ? `${target.name}이 나왔다.\n교체 성공: 예상 피해 ×${previousMultiplier} → ×${targetMultiplier}로 감소!`
     : `${target.name}이 나왔다.`;
-  const earnsSwitchRank = (
-    previousMultiplier > targetMultiplier
-    && targetMultiplier === 1
-    && enemyLog.hitEffectiveness === 'normal'
-    && target.hp > 0
-  );
-  if (earnsSwitchRank) {
-    switchLog += `\n${target.name}의 공격 +1!`;
-  }
-  const resolvedState = finishBattleRound(
-    nextState,
-    target,
-    enemy,
-    switchLog,
-    enemyLog,
-    defaultLearningDetail(nextState),
-  );
-  const resolvedTarget = resolvedState.party[resolvedState.activeIndex];
-  if (earnsSwitchRank && resolvedState.phase === 'battle' && resolvedTarget?.hp > 0) {
-    resolvedTarget.effects.push({
-      kind: 'buff',
-      stat: 'attack',
-      pct: 50,
-      rank: 1,
-      turns: 99,
-    });
-    resolvedState.battleStatUpCue = { stat: 'attack', target: 'player' };
-  }
-  return resolvedState;
+  nextState.phase = 'battle';
+  return nextState;
 }
 
 function completeCapturedEnemy(nextState: RunState, enemy: RuntimeMonster): RunState {

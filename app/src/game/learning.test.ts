@@ -85,8 +85,8 @@ describe('learning points', () => {
   it('removes note markup and keeps combat feedback to one concise sentence', () => {
     const text = 'L4 [기전] **장열**을 일으킨다. 두 번째 문장은 도감에서 확인한다.';
 
-    expect(sanitizeLearningText(text)).toBe('L4 [기전] 장열을 일으킨다. 두 번째 문장은 도감에서 확인한다.');
-    expect(conciseLearningFeedback(text)).toBe('L4 [기전] 장열을 일으킨다.');
+    expect(sanitizeLearningText(text)).toBe('장열을 일으킨다. 두 번째 문장은 도감에서 확인한다.');
+    expect(conciseLearningFeedback(text)).toBe('장열을 일으킨다.');
   });
 
   it('shortens a single very long sentence at a word boundary', () => {
@@ -101,7 +101,7 @@ describe('learning points', () => {
   it('picks an authored capture OX item (O/X with explanation)', () => {
     const monster = monsterWithLearningPoints(['L1 [감별점] 그람음성 막대균이다.']);
     monster.captureQuiz = [
-      { statement: '이 균은 그람양성이다.', answer: false, explain: '그람음성 막대균이다.', sourceL: 1 },
+      { statement: '이 균은 그람양성이다.', answer: false, explain: 'L1 [감별점] 그람음성 막대균이다.', sourceL: 1 },
       { statement: '이 균은 그람음성 막대균이다.', answer: true, explain: '그람음성 막대균이다.', sourceL: 1 },
     ];
 

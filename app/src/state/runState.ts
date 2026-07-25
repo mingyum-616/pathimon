@@ -227,6 +227,7 @@ export function enterBattle(state: RunState, enemyIndex?: number): RunState {
     lastEnemyHitEffectiveness: undefined,
     lastPlayerHitEffectiveness: undefined,
     battleStatUpCue: undefined,
+    pendingSwitchAttackReward: undefined,
   };
 
   if (nextState.encounterKind === 'boss') {

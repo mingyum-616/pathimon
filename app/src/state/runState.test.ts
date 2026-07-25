@@ -617,26 +617,29 @@ describe('run state loop', () => {
     const secondBattle = advanceFromShop(captured);
     const benchedHp = secondBattle.party[1].hp;
 
-    const result = resolveSwitchMonster(secondBattle, 1, 1);
+    const result = resolveSwitchMonster(secondBattle, 1);
 
     expect(result.activeIndex).toBe(1);
     expect(result.phase).toBe('battle');
     expect(result.party[1].hp).toBe(benchedHp);
-    expect(result.lastLog).toContain('switched in');
+    expect(result.lastLog).toContain('나왔다');
   });
 
-  it('switches to a benched pathimon and lets a human enemy act', () => {
+  it('switches to a benched pathimon without consuming the turn or changing the telegraph', () => {
     const state = createInitialRunState('challenge');
     state.floor = 5;
     const battle = enterBattle(state, 0);
     battle.party.push({ ...battle.party[0], templateId: 'tb', name: '결핵잠' });
     const benchedHp = battle.party[1].hp;
 
-    const result = resolveSwitchMonster(battle, 1, 1);
+    const announcedMoveIds = [...(battle.enemy?.plannedMoveIds ?? [])];
+    const result = resolveSwitchMonster(battle, 1);
 
     expect(result.encounterKind).toBe('trainer');
     expect(result.activeIndex).toBe(1);
-    expect(result.party[1].hp).toBeLessThan(benchedHp);
+    expect(result.party[1].hp).toBe(benchedHp);
+    expect(result.enemy?.plannedMoveIds).toEqual(announcedMoveIds);
+    expect(result.battleActionLog).toBeUndefined();
   });
 
   it('asks which party member to release when capturing with a full party', () => {
@@ -736,7 +739,7 @@ describe('run state loop', () => {
   it('keeps the active pathimon when switching to an invalid slot', () => {
     const battle = enterBattle(createInitialRunState());
 
-    const result = resolveSwitchMonster(battle, 1, 1);
+    const result = resolveSwitchMonster(battle, 1);
 
     expect(result.activeIndex).toBe(0);
     expect(result.lastLog).toContain('교체할 패시몬');
