@@ -503,9 +503,22 @@ export function battleUnitPanelLayouts(): { enemy: BattlePanelLayout; player: Ba
 }
 
 export function battleSpriteLayouts(): { enemy: BattleSpriteLayout; player: BattleSpriteLayout } {
+  const platformLayout = battleFieldLayerLayouts();
+  // Platform art sits off-center inside its transparent 320px canvas.
+  const enemyPlatformCenterX = 215.5;
+  const playerPlatformCenterX = 103.5;
+
   return {
-    enemy: { x: 760, y: 218, scale: 2.5 },
-    player: { x: 258, y: 382, scale: 2.1 },
+    enemy: {
+      x: platformLayout.enemyPlatform.x + enemyPlatformCenterX * platformLayout.enemyPlatform.scale,
+      y: 218,
+      scale: 2.5,
+    },
+    player: {
+      x: platformLayout.playerPlatform.x + playerPlatformCenterX * platformLayout.playerPlatform.scale,
+      y: 382,
+      scale: 2.1,
+    },
   };
 }
 

@@ -102,6 +102,20 @@ describe('battle UI helpers', () => {
     expect(panelLayout.enemy.y).toBeLessThan(panelLayout.player.y);
   });
 
+  it('centers both combat sprites on the visible battlefield platforms', () => {
+    const layerLayout = battleFieldLayerLayouts();
+    const spriteLayout = battleSpriteLayouts();
+
+    expect(spriteLayout.enemy.x).toBeCloseTo(
+      layerLayout.enemyPlatform.x + 215.5 * layerLayout.enemyPlatform.scale,
+      5,
+    );
+    expect(spriteLayout.player.x).toBeCloseTo(
+      layerLayout.playerPlatform.x + 103.5 * layerLayout.playerPlatform.scale,
+      5,
+    );
+  });
+
   it('raises combat sprite bases so platforms stay clear of the unit panels', () => {
     const spriteLayout = battleSpriteLayouts();
 

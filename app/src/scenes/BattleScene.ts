@@ -2348,7 +2348,7 @@ export class BattleScene extends Phaser.Scene {
     const endY = layouts.enemy.y - 116;
     const capsule = this.add.image(startX, startY, capsuleIconPath(capsuleId))
       .setDepth(BATTLE_EFFECT_DEPTH + 12)
-      .setScale(0.72);
+      .setScale(0.64);
 
     this.tweens.add({
       targets: capsule,

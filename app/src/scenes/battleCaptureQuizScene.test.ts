@@ -13,6 +13,12 @@ describe('BattleScene capture quiz and first trainer guidance', () => {
     expect(battleSceneSource).toContain('오답 시 최대 체력');
   });
 
+  it('keeps the thrown capsule slightly smaller than the previous battle effect', () => {
+    expect(battleSceneSource).toMatch(
+      /private playCapsuleThrow[\s\S]*?\.setScale\(0\.64\)/,
+    );
+  });
+
   it('shows the floor-five switch and dex guidance once', () => {
     expect(battleSceneSource).toContain('showFirstTrainerGuide');
     expect(battleSceneSource).toContain('예고된 처치의 피해 배율이 낮은 패시몬으로 교체하세요.');
