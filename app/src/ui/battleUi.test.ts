@@ -708,7 +708,7 @@ describe('battle UI helpers', () => {
     });
   });
 
-  it('shows treatments effective against a wild opponent in the pokedex move list', () => {
+  it('shows the wild opponent own moves in the pokedex move list', () => {
     const enemy = createMonster({
       name: '간실질 잠입',
       category: '흡충',
@@ -728,11 +728,16 @@ describe('battle UI helpers', () => {
     expect(summary.opponentName).toBe('간실질 잠입');
     expect(summary.typeLine).toBe('타입: 흡충');
     expect(summary.statLine).toBe('HP 31/80 · 공격 14 · 방어 8');
-    expect(summary.moveRows).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: '프라지콴텔 투여', multiplier: 4, matchReason: '프라지콴텔' }),
-      expect.objectContaining({ name: '진통제', multiplier: 2, matchReason: '복통' }),
-    ]));
-    expect(summary.moveRows.map((row) => row.name)).not.toContain('코아굴라제');
+    expect(summary.moveTabLabel).toBe('기술 목록');
+    expect(summary.moveHeading).toBe('간실질 잠입의 기술');
+    expect(summary.moveRows.map((row) => row.name)).toEqual([
+      '코아굴라제',
+      '조직융해',
+      '장독소',
+      '혈전융해',
+    ]);
+    expect(summary.moveRows.every((row) => row.multiplier === undefined && row.matchReason === undefined)).toBe(true);
+    expect(summary.moveRows.map((row) => row.name)).not.toContain('프라지콴텔 투여');
   });
   it('summarizes attack and defense advice for the current battle matchup', () => {
     const player = createMonster({ ability: 'large_resistance', tags: { pathway: 'gut', wall: 'nematode', location: 'intestinal_lumen', size: 'large' } });
@@ -813,6 +818,8 @@ describe('battle UI helpers', () => {
 
     const summary = battleDexSummary(trainer, defender);
 
+    expect(summary.moveTabLabel).toBe('효과 기술');
+    expect(summary.moveHeading).toBe('현재 선출: 화농성연쇄상구균에게 효과적인 적의 처치');
     expect(summary.moveRows.map((row) => [row.name, row.multiplier])).toEqual([
       ['페니실린 투여', 4],
       ['수액요법', 2],

@@ -545,7 +545,10 @@ export interface BattleMatchupSections {
 }
 
 export interface BattleDexSummary {
+  emptyMoveMessage: string;
+  moveHeading: string;
   moveRows: PokedexMoveRow[];
+  moveTabLabel: string;
   opponentName: string;
   statLine: string;
   typeLine: string;
@@ -1004,18 +1007,30 @@ export function battleMoveSlots(monster: RuntimeMonster): MoveSlot[] {
 }
 
 export function battleDexSummary(enemy: RuntimeMonster, defender?: RuntimeMonster): BattleDexSummary {
-  const treatmentRows = enemy.isTrainer
-    ? (defender ? formatBossAttackMatchupRows(enemy, defender).filter((row) => (row.multiplier ?? 1) > 1) : [])
-    : formatWildTreatmentRows(enemy);
-  return {
-    moveRows: treatmentRows
+  const moveRows = enemy.isTrainer
+    ? (defender ? formatBossAttackMatchupRows(enemy, defender)
+      .filter((row) => (row.multiplier ?? 1) > 1)
       .slice(0, 4)
       .map((row) => formatMoveRow(
         row.moveId,
         enemy,
         row.multiplier as 1 | 2 | 4,
         row.matchedTags,
-      )),
+      )) : [])
+    : formatPokedexMoveRows(
+      battleMoveSlots(enemy).filter((moveId): moveId is MoveId => Boolean(moveId)),
+      enemy,
+    ).slice(0, 4);
+
+  return {
+    emptyMoveMessage: enemy.isTrainer
+      ? '현재 선출에게 효과적인 적 처치가 없습니다.'
+      : '등록된 기술이 없습니다.',
+    moveHeading: enemy.isTrainer
+      ? `현재 선출${defender ? `: ${defender.name}` : ''}에게 효과적인 적의 처치`
+      : `${enemy.name}의 기술`,
+    moveRows,
+    moveTabLabel: enemy.isTrainer ? '효과 기술' : '기술 목록',
     opponentName: enemy.name,
     statLine: `HP ${enemy.hp}/${enemy.maxHp} · 공격 ${enemy.attack} · 방어 ${enemy.defense}`,
     typeLine: `타입: ${enemy.category}`,

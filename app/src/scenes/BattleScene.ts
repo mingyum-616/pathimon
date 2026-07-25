@@ -1019,7 +1019,7 @@ export class BattleScene extends Phaser.Scene {
       .setAlpha(0.84);
     addBoxLabel(this, 34, 470, dex.statLine, { width: 170, height: 18, size: 11, minSize: 8, maxLines: 1 })
       .setAlpha(0.84);
-    this.drawMenuButton(34, 500, 84, 34, '효과 기술', () => {
+    this.drawMenuButton(34, 500, 84, 34, dex.moveTabLabel, () => {
       this.dexTab = 'moves';
       this.render();
     }, this.dexTab === 'moves');
@@ -1030,7 +1030,7 @@ export class BattleScene extends Phaser.Scene {
 
     drawPanel(this, 220, 394, 628, 168).setAlpha(0.98);
     if (this.dexTab === 'moves') {
-      addBoxLabel(this, 238, 402, `현재 선출: ${player.name}에게 효과적인 적의 처치`, {
+      addBoxLabel(this, 238, 402, dex.moveHeading, {
         width: 586,
         height: 18,
         size: 13,
@@ -1038,7 +1038,7 @@ export class BattleScene extends Phaser.Scene {
         maxLines: 1,
       }).setAlpha(0.86);
       if (dex.moveRows.length === 0) {
-        addBoxLabel(this, 238, 434, '현재 선출에게 효과적인 적 처치가 없습니다.', {
+        addBoxLabel(this, 238, 434, dex.emptyMoveMessage, {
           width: 586,
           height: 24,
           size: 14,
