@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { APP_HEIGHT, APP_WIDTH, COLORS } from '../game/constants';
 import { addLabel, drawPanel } from '../ui/draw';
 import { disclaimerContent, type DisclaimerBlinkEffect } from '../ui/disclaimerUi';
+import { TEXT } from '../ui/typography';
 
 export class DisclaimerScene extends Phaser.Scene {
   private advancing = false;
@@ -18,16 +19,22 @@ export class DisclaimerScene extends Phaser.Scene {
 
     this.add.rectangle(0, 0, APP_WIDTH, APP_HEIGHT, 0x0e1118).setOrigin(0);
     drawPanel(this, 104, 118, 816, 324).setAlpha(0.96);
-    addLabel(this, APP_WIDTH / 2, 160, content.title, 34)
+    addLabel(this, APP_WIDTH / 2, 152, content.title, TEXT.display)
       .setOrigin(0.5)
       .setAlign('center');
 
-    content.lines.forEach((line, index) => {
-      addLabel(this, 148, 218 + index * 48, line, 18)
+    // 줄마다 실제 높이를 재서 쌓는다. 고정 간격이면 두 줄로 접히는 문단만 간격이 무너진다.
+    let lineY = 214;
+    content.lines.forEach((line) => {
+      const label = addLabel(this, 148, lineY, line, TEXT.body)
         .setWordWrapWidth(728)
-        .setLineSpacing(6)
-        .setAlpha(0.92);
+        .setLineSpacing(6);
+      lineY += label.height + 16;
     });
+
+    addLabel(this, APP_WIDTH / 2, 462, '아무 키나 누르면 계속됩니다', TEXT.label)
+      .setOrigin(0.5)
+      .setColor(COLORS.muted);
 
     this.input.on('pointerdown', this.skipBlinkOut, this);
     this.input.keyboard?.on('keydown', this.skipBlinkOut, this);

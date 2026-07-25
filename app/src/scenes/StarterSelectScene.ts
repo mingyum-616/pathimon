@@ -4,7 +4,8 @@ import { MONSTERS, starterCandidateRoster } from '../data/monsters';
 import { APP_HEIGHT, APP_WIDTH, COLORS } from '../game/constants';
 import { createInitialRunState, enterBattle } from '../state/runState';
 import type { MonsterData, RunMode, VisualStyle } from '../types/game';
-import { addLabel, drawPanel } from '../ui/draw';
+import { addBoxLabel, addLabel, drawPanel } from '../ui/draw';
+import { TEXT } from '../ui/typography';
 import { capsuleIconPath, pathimonSpriteAssets } from '../ui/battleUi';
 import {
   MAX_STARTER_SELECTIONS,
@@ -25,8 +26,6 @@ interface StarterSelectSceneData {
 }
 
 const ACTIVE_LINE = 0x72d6ff;
-const BUTTON_FILL = 0x2f2840;
-const BUTTON_ACTIVE_FILL = 0x4a405d;
 
 export class StarterSelectScene extends Phaser.Scene {
   private candidates: MonsterData[] = [];
@@ -83,12 +82,13 @@ export class StarterSelectScene extends Phaser.Scene {
     const selected = this.candidates[this.slotCursor];
 
     this.drawBackground();
-    addLabel(this, APP_WIDTH / 2, 42, copy.prompt, 30)
+    addLabel(this, APP_WIDTH / 2, 32, copy.prompt, TEXT.display)
       .setOrigin(0.5)
       .setAlign('center')
       .setWordWrapWidth(760);
 
     this.drawCase();
+    this.drawCaseGuide();
     this.drawCapsuleSlots();
     this.drawChoiceSummary(selected);
     this.drawSelectedParty(copy.selectedLabel);
@@ -114,25 +114,59 @@ export class StarterSelectScene extends Phaser.Scene {
     this.add.rectangle(444, 404, 136, 22, 0xc08a6a).setOrigin(0).setStrokeStyle(4, 0x5c372b);
   }
 
+  // 케이스 뚜껑이 비어 있어 죽은 공간처럼 보였다. 조작 안내를 그 안에 넣는다.
+  private drawCaseGuide(): void {
+    const chosen = this.selectedIds[0]
+      ? MONSTERS.find((monster) => monster.id === this.selectedIds[0])?.name
+      : undefined;
+    addBoxLabel(this, 512, 126, chosen ? `${chosen} 선택 완료` : '캡슐을 눌러 함께 시작할 패시몬 1마리를 고르세요', {
+      width: 544,
+      height: 26,
+      size: TEXT.body,
+      maxLines: 1,
+      align: 'center',
+      origin: [0.5, 0],
+      color: chosen ? '#9be7b4' : COLORS.muted,
+    });
+    addBoxLabel(this, 512, 154, '← → 로 이동, Enter 로 선택', {
+      width: 544,
+      height: 22,
+      size: TEXT.caption,
+      maxLines: 1,
+      align: 'center',
+      origin: [0.5, 0],
+      color: COLORS.muted,
+    });
+  }
+
   private drawCapsuleSlots(): void {
     const capsulePath = capsuleIconPath('universal');
     starterCapsuleSlots().forEach((slot, index) => {
       const monster = this.candidates[index];
       if (!monster) return;
       const active = !this.startCursor && this.slotCursor === index;
+      const chosen = this.selectedIds.includes(monster.id);
       if (active) {
         this.drawCursorMarker(slot.x, slot.markerY);
       }
 
       const spriteAssets = pathimonSpriteAssets(monster, this.visualStyle);
       const shadow = this.add.ellipse(slot.x, slot.y + 76, 104, 24, 0x12070b, 0.36);
-      shadow.setStrokeStyle(2, active ? ACTIVE_LINE : 0x4a2a2a, active ? 0.75 : 0.22);
+      shadow.setStrokeStyle(3, chosen ? COLORS.selected : active ? ACTIVE_LINE : 0x4a2a2a, chosen || active ? 0.9 : 0.22);
       this.add.image(slot.x, slot.y + 4, spriteAssets.front)
         .setOrigin(0.5)
         .setDisplaySize(active ? 106 : 96, active ? 106 : 96);
       this.add.image(slot.x, slot.y + 78, capsulePath)
         .setOrigin(0.5)
         .setDisplaySize(active ? 58 : 52, active ? 58 : 52);
+
+      // 선택 결과가 우측 패널 텍스트로만 바뀌면 어느 캡슐을 골랐는지 알기 어렵다.
+      if (chosen) {
+        this.add.rectangle(slot.x, slot.y + 10, 116, 116, COLORS.selected, 0.001)
+          .setStrokeStyle(3, COLORS.selected, 0.95);
+        const badge = this.add.circle(slot.x + 46, slot.y - 38, 15, COLORS.selected);
+        addLabel(this, badge.x, badge.y, '✓', TEXT.body).setOrigin(0.5).setColor('#10231a');
+      }
 
       const hit = this.add.rectangle(slot.x - 62, slot.y - 58, 124, 158, 0xffffff, 0.001).setOrigin(0);
       hit.setInteractive({ useHandCursor: true });
@@ -146,48 +180,65 @@ export class StarterSelectScene extends Phaser.Scene {
 
   private drawChoiceSummary(monster: MonsterData): void {
     const summary = starterChoiceSummary(monster);
-    drawPanel(this, 104, 438, 478, 104).setAlpha(0.96);
-    addLabel(this, 128, 456, summary.title, 22).setWordWrapWidth(430);
+    drawPanel(this, 26, 438, 486, 112).setAlpha(0.96);
+    addLabel(this, 50, 452, summary.title, TEXT.title).setWordWrapWidth(438);
     summary.lines.forEach((line, index) => {
-      addLabel(this, 128, 486 + index * 17, line, 13)
-        .setAlpha(0.88)
-        .setWordWrapWidth(430);
+      addLabel(this, 50, 488 + index * 20, line, TEXT.label)
+        .setColor(COLORS.muted)
+        .setWordWrapWidth(438);
     });
   }
 
   private drawSelectedParty(label: string): void {
-    drawPanel(this, 612, 438, 288, 104).setAlpha(0.96);
-    addLabel(this, 634, 456, `${label} ${this.selectedIds.length}/${MAX_STARTER_SELECTIONS}`, 18).setWordWrapWidth(240);
+    drawPanel(this, 532, 438, 268, 112).setAlpha(0.96);
+    addLabel(this, 554, 452, `${label} ${this.selectedIds.length}/${MAX_STARTER_SELECTIONS}`, TEXT.heading)
+      .setWordWrapWidth(224);
     const names = this.selectedIds.map((id) => MONSTERS.find((monster) => monster.id === id)?.name ?? id);
-    addLabel(this, 634, 490, names.length ? names.join(' / ') : '캡슐을 선택하면 추가됩니다.', 14)
-      .setAlpha(0.88)
-      .setWordWrapWidth(236);
+    addBoxLabel(this, 554, 490, names.length ? names.join(' / ') : '아직 고르지 않았습니다.', {
+      width: 224,
+      height: 44,
+      size: TEXT.body,
+      maxLines: 2,
+      color: names.length ? COLORS.text : COLORS.muted,
+    });
   }
 
+  // 예전에는 케이스 그림 위에 떠 있어 버튼인지 장식인지 구분이 안 됐다.
+  // 요약 패널과 같은 줄에 세워 두어 하단 행이 '정보 → 선택 → 시작'으로 읽히게 한다.
   private drawStartButton(label: string): void {
     const enabled = canStartWithStarterSelection(this.selectedIds);
-    const x = 730;
-    const y = 382;
-    const width = 190;
-    const height = 42;
-    const active = this.startCursor;
-    const rect = this.add.rectangle(x, y, width, height, enabled ? active ? BUTTON_ACTIVE_FILL : BUTTON_FILL : 0x252331).setOrigin(0);
-    rect.setStrokeStyle(3, active ? ACTIVE_LINE : COLORS.line, enabled ? 0.94 : 0.35);
-    rect.setAlpha(enabled ? 1 : 0.52);
+    const x = 820;
+    const y = 438;
+    const width = 178;
+    const height = 112;
+    const active = this.startCursor && enabled;
+    const rect = this.add.rectangle(x, y, width, height, enabled ? active ? 0x27664a : 0x1d4a34 : 0x252331).setOrigin(0);
+    rect.setStrokeStyle(active ? 4 : 3, enabled ? COLORS.selected : COLORS.border, enabled ? 0.95 : 0.5);
+    rect.setAlpha(enabled ? 1 : 0.6);
     if (enabled) {
       rect.setInteractive({ useHandCursor: true });
       rect.on('pointerdown', () => this.startRun());
     }
 
-    if (active) {
-      this.add.triangle(x - 18, y + height / 2, 0, -8, 0, 8, 13, 0, 0xffffff).setOrigin(0.5);
+    addBoxLabel(this, x + width / 2, y + (enabled ? height / 2 : 40), label, {
+      width: width - 24,
+      height: 56,
+      size: TEXT.heading,
+      maxLines: 2,
+      align: 'center',
+      origin: [0.5, 0.5],
+    }).setAlpha(enabled ? 1 : 0.7);
+    if (!enabled) {
+      addBoxLabel(this, x + width / 2, y + 74, '캡슐을 먼저 고르세요', {
+        width: width - 24,
+        height: 22,
+        size: TEXT.caption,
+        maxLines: 1,
+        align: 'center',
+        origin: [0.5, 0],
+        color: COLORS.muted,
+      });
     }
-
-    addLabel(this, x + width / 2, y + height / 2, label, 16)
-      .setOrigin(0.5)
-      .setAlign('center')
-      .setWordWrapWidth(width - 18)
-      .setAlpha(enabled ? 1 : 0.56);
   }
 
   private drawCursorMarker(x: number, y: number): void {

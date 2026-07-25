@@ -3,7 +3,7 @@ import modeSelectSceneSource from './ModeSelectScene.ts?raw';
 
 describe('ModeSelectScene copy', () => {
   it('uses concise mode and visual-style labels without helper hints', () => {
-    expect(modeSelectSceneSource).toContain('진행 방식과 디자인을 선택합니다.');
+    expect(modeSelectSceneSource).toContain('진행 방식과 디자인을 각각 하나씩 고르세요.');
     expect(modeSelectSceneSource).toContain('진행 방식');
     expect(modeSelectSceneSource).toContain('디자인');
     expect(modeSelectSceneSource).not.toContain('표현 방식');
@@ -23,8 +23,13 @@ describe('ModeSelectScene copy', () => {
   it('keeps both choices visible until the player confirms the start button', () => {
     expect(modeSelectSceneSource).toContain('private startRun(): void');
     expect(modeSelectSceneSource).toContain("'게임 시작'");
-    expect(modeSelectSceneSource).toContain("'선택됨'");
+    expect(modeSelectSceneSource).toContain('addSelectedBadge');
     expect(modeSelectSceneSource).not.toContain("this.time.delayedCall(120, () => this.scene.start('StarterSelectScene'");
+  });
+
+  it('separates focus from selection so hovering a card never looks selected', () => {
+    expect(modeSelectSceneSource).toContain('applySelectionStyle');
+    expect(modeSelectSceneSource).not.toContain("rect.on('pointerover', () => rect.setFillStyle(SELECTED_FILL))");
   });
 
   it('aligns the visual-style controls with the run-mode cards', () => {

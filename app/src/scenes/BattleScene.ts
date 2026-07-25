@@ -17,16 +17,23 @@ import {
   resolveSwitchMonster,
 } from '../battle/turn';
 import { createBossRosterIds } from '../data/bosses';
-import { CAPSULE_LABELS, CAPSULE_ORDER, capsuleOrderForMode } from '../data/capsules';
+import { CAPSULE_LABELS, CAPSULE_ORDER, capsuleCanCatch, capsuleOrderForMode } from '../data/capsules';
 import {
   conciseLearningFeedback,
   pickCaptureQuiz,
   sanitizeLearningText,
   type CaptureQuiz,
 } from '../game/learning';
-import { advanceFromShop, createInitialRunState, encounterKindForFloor, enterBattle } from '../state/runState';
+import {
+  advanceFromShop,
+  canEvolvePartyMember,
+  createInitialRunState,
+  encounterKindForFloor,
+  enterBattle,
+  evolvePartyMember,
+} from '../state/runState';
 import type { CapsuleId, HitEffectiveness, MoveId, RunState, RuntimeMonster } from '../types/game';
-import { COLORS, APP_WIDTH, APP_HEIGHT } from '../game/constants';
+import { COLORS, APP_WIDTH, APP_HEIGHT, FONT_FAMILY } from '../game/constants';
 import {
   battleActionOptions,
   battleSfxAssetPaths,
@@ -75,6 +82,7 @@ import {
 import type { BattleActionId, BattleUnitPanelRole, PartyMenuPurpose, PathimonTypeIcon } from '../ui/battleUi';
 import { destroySceneChildren } from '../ui/sceneCleanup';
 import { addBoxLabel, addLabel, drawHpBar, drawPanel } from '../ui/draw';
+import { MIN_TEXT_SIZE, MUTED_ALPHA, TEXT } from '../ui/typography';
 import { advanceTypewriter } from '../ui/typewriter';
 
 interface BattleSceneData {
@@ -98,18 +106,31 @@ const BATTLE_STATUS_HOLD_MS = 1000;
 const TYPEWRITER_INTERVAL_MS = 24;
 const PHASE_TWO_BOSS_SCALE = 1.2;
 
+// 도감 기술표 열 정의. 머리글과 셀이 같은 좌표를 쓰도록 한곳에 모은다.
+const DEX_TABLE_COLUMNS = [
+  { title: '처치', x: 238, width: 236, align: 'left' as const },
+  { title: '계통', x: 486, width: 84, align: 'left' as const },
+  { title: '위력', x: 578, width: 52, align: 'right' as const },
+  { title: '명중', x: 638, width: 56, align: 'right' as const },
+  { title: '배율', x: 706, width: 78, align: 'left' as const },
+];
+
 export class BattleScene extends Phaser.Scene {
   private state!: RunState;
   private selectedMoveId!: MoveId;
   private armedMoveId!: MoveId;
   private viewMode: BattleViewMode = 'command';
   private dexTab: DexTab = 'moves';
+  // 기술표에서 설명 한 줄을 띄울 대상 행.
+  private dexRowCursor = 0;
   private statusTab: StatusTab = 'profile';
   private notice = '';
   private commandCursor = 0;
   private capsuleCursor = 0;
   private partyCursor = 0;
   private partyMenuOpen = false;
+  // 진화 조건 같은 1회성 안내를 파티 화면 하단에 띄운다. 커서를 움직이면 사라진다.
+  private partyNotice?: string;
   private partyMenuCursor = 0;
   private statusMoveCursor = 0;
   private statusLearningOpen = false;
@@ -351,8 +372,8 @@ export class BattleScene extends Phaser.Scene {
       this.battleMessageStage === 'preparation'
       && (this.viewMode === 'party' || this.state.phase === 'forcedSwitch' || this.state.phase === 'releaseCapture')
     ) {
+      // 파티 화면은 카드·메뉴·그만둔다가 전부 탭 가능하다. 가상 패드를 겹쳐 그릴 이유가 없다.
       this.drawPartyView();
-      this.drawMobileOverlay();
       return;
     }
 
@@ -372,6 +393,7 @@ export class BattleScene extends Phaser.Scene {
       if (this.state.phase !== 'floorClear') {
         this.drawMobileOverlay();
       }
+      this.drawHomeButton();
     }
   }
 
@@ -453,7 +475,7 @@ export class BattleScene extends Phaser.Scene {
     return combatSpriteScale(monster, baseScale);
   }
 
-  private pathimonFrameBorderColor(monster: RuntimeMonster, fallback: number = COLORS.line): number {
+  private pathimonFrameBorderColor(monster: RuntimeMonster, fallback: number = COLORS.borderStrong): number {
     return pathimonTypeBorderColor(monster, this.state.mode) ?? fallback;
   }
 
@@ -626,9 +648,7 @@ export class BattleScene extends Phaser.Scene {
     graphics.strokeRect(x + 1, y + 1, width - 2, height - 2);
   }
 
-  private drawFloorBadge(light = false): void {
-    const x = APP_WIDTH - 138;
-    const y = 14;
+  private drawFloorBadge(light = false, x = APP_WIDTH - 138, y = 14): void {
     const fill = light ? 0xf7faf8 : 0x20202c;
     const stroke = light ? 0x20202c : 0x72d6ff;
     const color = light ? '#20202c' : '#ffffff';
@@ -984,25 +1004,26 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private drawCapsuleView(player: RuntimeMonster, enemy: RuntimeMonster): void {
-    addBoxLabel(this, 34, 412, `${enemy.name}에게 어떤 캡슐을 던질까?`, { width: 560, height: 30, size: 24, minSize: 16, maxLines: 1 });
-    addBoxLabel(this, 36, 450, `대상 계열: ${enemy.category}`, { width: 560, height: 24, size: 17, minSize: 12, maxLines: 1 })
-      .setAlpha(0.92);
-    addBoxLabel(this, 36, 482, this.notice || `${player.name}은 캡슐을 준비했다.`, { width: 560, height: 48, size: 15, minSize: 11, maxLines: 2 })
-      .setAlpha(0.84);
+    addBoxLabel(this, 34, 412, `${enemy.name}에게 어떤 캡슐을 던질까?`, { width: 560, height: 32, size: TEXT.title, maxLines: 1 });
+    // 대상 계열을 칩으로 세우고 같은 계열 캡슐에도 표시를 달아 둘을 눈으로 잇는다.
+    this.add.rectangle(36, 450, 132, 26, COLORS.chipMedium, 0.95).setOrigin(0);
+    addLabel(this, 102, 463, `계열: ${enemy.category}`, TEXT.label).setOrigin(0.5);
+    addBoxLabel(this, 36, 486, this.notice || `${player.name}은 캡슐을 준비했다.`, { width: 560, height: 48, size: TEXT.body, maxLines: 2, color: COLORS.muted });
 
     const panelX = 602;
     const panelY = 92;
     const rowX = panelX + 58;
     const rowY = panelY + 58;
     drawPanel(this, panelX, panelY, 342, 422).setAlpha(0.98);
-    addLabel(this, panelX + 28, panelY + 20, '캡슐', 24);
+    addLabel(this, panelX + 28, panelY + 20, '캡슐', TEXT.title);
 
     capsuleOrderForMode(this.state.mode).forEach((capsuleId, index) => {
       const count = this.capsuleCountLabel(capsuleId);
-      this.drawCapsuleRowButton(rowX, rowY + index * 42, 250, 34, capsuleId, `x${count}`, CAPSULE_LABELS[capsuleId], () => {
+      const matches = capsuleCanCatch(capsuleId, enemy);
+      this.drawCapsuleRowButton(rowX, rowY + index * 42, 250, 34, capsuleId, count, CAPSULE_LABELS[capsuleId], () => {
         this.capsuleCursor = index;
         this.handleCapsuleThrow(capsuleId);
-      }, this.capsuleCursor === index);
+      }, this.capsuleCursor === index, matches);
     });
 
     this.drawMenuButton(rowX, panelY + 364, 250, 34, '취소', () => {
@@ -1013,115 +1034,211 @@ export class BattleScene extends Phaser.Scene {
 
   private drawDexView(player: RuntimeMonster, enemy: RuntimeMonster): void {
     const dex = battleDexSummary(enemy, player);
+    this.clampDexRowCursor(dex.moveRows.length);
 
-    addLabel(this, 34, 404, '도감', 21);
-    addBoxLabel(this, 34, 432, dex.opponentName, { width: 170, height: 20, size: 14, minSize: 10, maxLines: 1 })
-      .setAlpha(0.9);
-    addBoxLabel(this, 34, 452, dex.typeLine, { width: 170, height: 18, size: 11, minSize: 9, maxLines: 1 })
-      .setAlpha(0.84);
-    addBoxLabel(this, 34, 470, dex.statLine, { width: 170, height: 18, size: 11, minSize: 8, maxLines: 1 })
-      .setAlpha(0.84);
-    this.drawMenuButton(34, 500, 84, 34, dex.moveTabLabel, () => {
+    addLabel(this, 30, 392, '도감', TEXT.label).setColor(COLORS.muted);
+    this.drawDexPortrait(enemy, 62, 478);
+    addBoxLabel(this, 104, 418, dex.opponentName, { width: 108, height: 22, size: TEXT.body, maxLines: 1 });
+    addBoxLabel(this, 104, 444, dex.typeLine, { width: 108, height: 20, size: TEXT.caption, maxLines: 1, color: COLORS.muted });
+    addBoxLabel(this, 30, 486, dex.statLine, { width: 184, height: 20, size: TEXT.label, maxLines: 1, color: COLORS.muted });
+    // 두 번째 탭의 커서 삼각형이 첫 번째 탭을 덮지 않도록 사이 간격을 벌린다.
+    this.drawMenuButton(30, 512, 84, 32, dex.moveTabLabel, () => {
       this.dexTab = 'moves';
       this.render();
     }, this.dexTab === 'moves');
-    this.drawMenuButton(128, 500, 84, 34, '상성표', () => {
+    this.drawMenuButton(134, 512, 84, 32, '상성표', () => {
       this.dexTab = 'effectiveness';
       this.render();
     }, this.dexTab === 'effectiveness');
 
-    drawPanel(this, 220, 394, 628, 168).setAlpha(0.98);
+    drawPanel(this, 220, 392, 628, 176).setAlpha(0.98);
     if (this.dexTab === 'moves') {
-      addBoxLabel(this, 238, 402, dex.moveHeading, {
-        width: 586,
-        height: 18,
-        size: 13,
-        minSize: 10,
-        maxLines: 1,
-      }).setAlpha(0.86);
-      if (dex.moveRows.length === 0) {
-        addBoxLabel(this, 238, 434, dex.emptyMoveMessage, {
-          width: 586,
-          height: 24,
-          size: 14,
-          minSize: 11,
-          maxLines: 1,
-        }).setAlpha(0.78);
-      }
-      dex.moveRows.forEach((row, index) => {
-        const y = 426 + index * 33;
-        const multiplierLabel = row.multiplier === 4 ? '직접 ×4' : row.multiplier === 2 ? '간접 ×2' : '';
-        addBoxLabel(this, 238, y, `${row.name}${multiplierLabel ? ` · ${multiplierLabel}` : ''}`, {
-          width: 190,
-          height: 18,
-          size: 15,
-          minSize: 11,
-          maxLines: 1,
-        });
-        addBoxLabel(this, 452, y + 1, `${row.type} · 위력 ${row.power} · 명중 ${row.accuracy}`, {
-          width: 372,
-          height: 16,
-          size: 12,
-          minSize: 9,
-          maxLines: 1,
-        }).setAlpha(0.88);
-        const description = row.matchReason
-          ? `일치: ${row.matchReason} · ${row.description}`
-          : row.description;
-        addBoxLabel(this, 258, y + 17, description, {
-          width: 566,
-          height: 14,
-          size: 11,
-          minSize: 9,
-          maxLines: 1,
-        }).setAlpha(0.88);
-      });
+      this.drawDexMoveTable(dex);
     } else if (enemy.isTrainer) {
       this.drawAnnouncedTreatmentMatchups(enemy);
     } else {
       this.drawWildTreatmentMatchups(enemy);
     }
 
-    this.drawMenuButton(852, 488, 120, 34, '뒤로', () => {
+    this.drawMenuButton(862, 392, 120, 34, '뒤로', () => {
       this.viewMode = 'command';
       this.render();
     });
   }
 
-  private drawAnnouncedTreatmentMatchups(enemy: RuntimeMonster): void {
-    const groups = formatAnnouncedTreatmentMatchups(enemy, this.state.party);
-    addLabel(this, 238, 404, '예고된 처치와 파티 상성', 14).setAlpha(0.86);
+  // 도감·상성표는 이름만으로 누구 얘기인지 알기 어렵다. 작은 초상을 붙여 대상을 고정한다.
+  private drawDexPortrait(monster: RuntimeMonster, x: number, baselineY: number): void {
+    const assets = pathimonSpriteAssets(monster, this.state.visualStyle);
+    this.add.rectangle(x - 32, baselineY - 64, 64, 64, COLORS.panelDark, 0.9)
+      .setOrigin(0)
+      .setStrokeStyle(2, this.pathimonFrameBorderColor(monster));
+    this.drawMonsterSprite(monster, assets.front, x, baselineY - 4, 0.5);
+  }
 
-    if (groups.length === 0) {
-      addBoxLabel(this, 238, 434, '아직 예고된 처치가 없습니다.', {
+  // 예전 표는 이름·배율·계통·위력·명중·설명이 한 줄에 뒤엉켜 있었다.
+  // 열 머리글을 세우고 설명은 커서가 놓인 한 줄에만 띄운다.
+  private drawDexMoveTable(dex: ReturnType<typeof battleDexSummary>): void {
+    addBoxLabel(this, 238, 400, dex.moveHeading, {
+      width: 586,
+      height: 20,
+      size: TEXT.label,
+      maxLines: 1,
+      color: COLORS.muted,
+    });
+
+    if (dex.moveRows.length === 0) {
+      addBoxLabel(this, 238, 452, dex.emptyMoveMessage, {
         width: 586,
-        height: 20,
-        size: 13,
-        minSize: 10,
+        height: 24,
+        size: TEXT.body,
         maxLines: 1,
-      }).setAlpha(0.76);
+        color: COLORS.muted,
+      });
       return;
     }
 
-    groups.slice(0, 2).forEach((group, index) => {
-      const y = 428 + index * 62;
-      addBoxLabel(this, 238, y, group.attackName, {
-        width: 190,
+    // 야생 조우에서는 상대 기술에 배율이 붙지 않는다. 전부 '무관 ×1'로 채우면 잡음만 된다.
+    const showMultiplier = dex.moveRows.some((row) => row.multiplier !== undefined);
+    const headerY = 420;
+    this.add.rectangle(230, headerY + 18, 608, 1, COLORS.border, 0.9).setOrigin(0);
+    DEX_TABLE_COLUMNS.filter((column) => showMultiplier || column.title !== '배율').forEach((column) => {
+      addBoxLabel(this, column.x, headerY, column.title, {
+        width: column.width,
         height: 18,
-        size: 14,
-        minSize: 11,
+        size: TEXT.caption,
+        maxLines: 1,
+        align: column.align,
+        origin: column.align === 'right' ? [1, 0] : [0, 0],
+        color: COLORS.muted,
+      });
+    });
+
+    dex.moveRows.forEach((row, index) => {
+      const y = 444 + index * 26;
+      const focused = index === this.dexRowCursor;
+      const hit = this.add.rectangle(230, y - 3, 608, 26, COLORS.focus, focused ? 0.16 : 0.001).setOrigin(0);
+      hit.setInteractive({ useHandCursor: true });
+      hit.on('pointerover', () => {
+        if (this.dexRowCursor === index) return;
+        this.dexRowCursor = index;
+        this.render();
+      });
+
+      addBoxLabel(this, DEX_TABLE_COLUMNS[0].x, y, row.name, {
+        width: DEX_TABLE_COLUMNS[0].width,
+        height: 22,
+        size: TEXT.body,
         maxLines: 1,
       });
-      const matchupText = group.party
-        .map(({ monsterName, multiplier }) => `${monsterName} ×${multiplier}`)
-        .join(' · ');
-      addBoxLabel(this, 430, y, matchupText, {
-        width: 394,
-        height: 42,
-        size: 12,
-        minSize: 9,
-        maxLines: 2,
-      }).setLineSpacing(3);
+      addBoxLabel(this, DEX_TABLE_COLUMNS[1].x, y + 2, row.type, {
+        width: DEX_TABLE_COLUMNS[1].width,
+        height: 20,
+        size: TEXT.label,
+        maxLines: 1,
+        color: COLORS.muted,
+      });
+      addBoxLabel(this, DEX_TABLE_COLUMNS[2].x + DEX_TABLE_COLUMNS[2].width, y + 2, row.power, {
+        width: DEX_TABLE_COLUMNS[2].width,
+        height: 20,
+        size: TEXT.label,
+        maxLines: 1,
+        align: 'right',
+        origin: [1, 0],
+      });
+      addBoxLabel(this, DEX_TABLE_COLUMNS[3].x + DEX_TABLE_COLUMNS[3].width, y + 2, row.accuracy, {
+        width: DEX_TABLE_COLUMNS[3].width,
+        height: 20,
+        size: TEXT.label,
+        maxLines: 1,
+        align: 'right',
+        origin: [1, 0],
+      });
+      if (showMultiplier) this.drawMultiplierChip(DEX_TABLE_COLUMNS[4].x, y - 1, row.multiplier);
+    });
+
+    const focusedRow = dex.moveRows[this.dexRowCursor];
+    if (!focusedRow) return;
+    this.add.rectangle(230, 546, 608, 1, COLORS.border, 0.9).setOrigin(0);
+    addBoxLabel(this, 238, 550, focusedRow.matchReason
+      ? `일치: ${focusedRow.matchReason} · ${focusedRow.description}`
+      : focusedRow.description, {
+      width: 592,
+      height: 16,
+      size: TEXT.caption,
+      maxLines: 1,
+      color: COLORS.muted,
+    });
+  }
+
+  // ×4/×2는 표에서 가장 먼저 읽혀야 하는 값이라 글자가 아니라 색 칩으로 세운다.
+  private drawMultiplierChip(x: number, y: number, multiplier?: number): void {
+    const preset = multiplier === 4
+      ? { fill: COLORS.chipStrong, label: '직접 ×4' }
+      : multiplier === 2
+        ? { fill: COLORS.chipMedium, label: '간접 ×2' }
+        : { fill: COLORS.chipNeutral, label: '무관 ×1' };
+    this.add.rectangle(x, y, 78, 24, preset.fill, 0.95).setOrigin(0);
+    addLabel(this, x + 39, y + 12, preset.label, TEXT.caption).setOrigin(0.5);
+  }
+
+  private clampDexRowCursor(rowCount: number): void {
+    this.dexRowCursor = Math.min(Math.max(0, rowCount - 1), Math.max(0, this.dexRowCursor));
+  }
+
+  private drawAnnouncedTreatmentMatchups(enemy: RuntimeMonster): void {
+    const groups = formatAnnouncedTreatmentMatchups(enemy, this.state.party);
+    addBoxLabel(this, 238, 400, '예고된 처치와 내 파티 상성', {
+      width: 586,
+      height: 20,
+      size: TEXT.label,
+      maxLines: 1,
+      color: COLORS.muted,
+    });
+
+    if (groups.length === 0) {
+      addBoxLabel(this, 238, 452, '아직 예고된 처치가 없습니다.', {
+        width: 586,
+        height: 22,
+        size: TEXT.body,
+        maxLines: 1,
+        color: COLORS.muted,
+      });
+      return;
+    }
+
+    groups.slice(0, 2).forEach((group, groupIndex) => {
+      const y = 428 + groupIndex * 70;
+      addBoxLabel(this, 238, y, group.attackName, {
+        width: 586,
+        height: 22,
+        size: TEXT.body,
+        maxLines: 1,
+      });
+      // group.party는 this.state.party를 그대로 map 한 결과라 인덱스가 1:1로 맞는다.
+      group.party.slice(0, 6).forEach(({ monsterName, multiplier }, index) => {
+        const cardX = 238 + index * 100;
+        const monster = this.state.party[index];
+        this.add.rectangle(cardX, y + 26, 92, 34, COLORS.panelDark, 0.86)
+          .setOrigin(0)
+          .setStrokeStyle(2, multiplier >= 4 ? COLORS.chipStrong : multiplier >= 2 ? COLORS.chipMedium : COLORS.border);
+        if (monster) {
+          const assets = pathimonSpriteAssets(monster, this.state.visualStyle);
+          this.drawMonsterSprite(monster, assets.front, cardX + 18, y + 58, 0.3);
+        }
+        addBoxLabel(this, cardX + 36, y + 29, monsterName, {
+          width: 52,
+          height: 16,
+          size: TEXT.caption,
+          maxLines: 1,
+        });
+        addBoxLabel(this, cardX + 36, y + 45, `×${multiplier}`, {
+          width: 52,
+          height: 16,
+          size: TEXT.caption,
+          maxLines: 1,
+          color: multiplier >= 2 ? '#ffb4ae' : COLORS.muted,
+        });
+      });
     });
   }
 
@@ -1130,35 +1247,35 @@ export class BattleScene extends Phaser.Scene {
     const direct = rows.filter((row) => row.multiplier === 4);
     const indirect = rows.filter((row) => row.multiplier === 2);
 
-    addLabel(this, 238, 404, '이 패시몬에 효과적인 처치', 14).setAlpha(0.86);
-    this.drawTreatmentGroup('직접 처치 ×4', direct, 428);
-    this.drawTreatmentGroup('간접 처치 ×2', indirect, 486);
+    addBoxLabel(this, 238, 400, `${enemy.name}에게 잘 듣는 처치`, {
+      width: 586,
+      height: 20,
+      size: TEXT.label,
+      maxLines: 1,
+      color: COLORS.muted,
+    });
+    this.drawTreatmentGroup(4, direct, 428);
+    this.drawTreatmentGroup(2, indirect, 496);
   }
 
   private drawTreatmentGroup(
-    label: string,
+    multiplier: 2 | 4,
     rows: ReturnType<typeof formatWildTreatmentRows>,
     y: number,
   ): void {
-    addBoxLabel(this, 238, y, label, {
-      width: 120,
-      height: 18,
-      size: 12,
-      minSize: 10,
-      maxLines: 1,
-    }).setAlpha(0.9);
+    this.drawMultiplierChip(238, y, multiplier);
     const text = rows.length > 0
       ? rows
         .map((row) => row.matchedTags ? `${row.attackName} (${row.matchedTags})` : row.attackName)
         .join(' · ')
       : '해당 없음';
-    addBoxLabel(this, 366, y, text, {
-      width: 458,
-      height: 42,
-      size: 12,
-      minSize: 9,
-      maxLines: 2,
-    }).setLineSpacing(3).setAlpha(rows.length > 0 ? 1 : 0.62);
+    addBoxLabel(this, 330, y, text, {
+      width: 494,
+      height: 56,
+      size: TEXT.label,
+      maxLines: 3,
+      color: rows.length > 0 ? COLORS.text : COLORS.muted,
+    }).setLineSpacing(4);
   }
 
   private handleMovePress(moveId: MoveId): void {
@@ -1520,7 +1637,7 @@ export class BattleScene extends Phaser.Scene {
     for (let index = 0; index < 4; index += 1) {
       const wisp = this.add.text(x - 34 + index * 22, y - 18 + (index % 2) * 18, 'ha', {
         color: '#d6b9ff',
-        fontFamily: '"Malgun Gothic", Arial, sans-serif',
+        fontFamily: FONT_FAMILY,
         fontSize: '12px',
       }).setDepth(BATTLE_EFFECT_DEPTH + 1).setAlpha(0.72);
       this.tweens.add({
@@ -1652,12 +1769,13 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  // 학습모드는 캡슐이 무제한이라 개수를 붙일 이유가 없다. 'x∞'는 작아서 읽히지도 않았다.
   private capsuleButtonLabel(): string {
-    return this.state.mode === 'learning' ? '캡슐 ∞' : '캡슐 ' + this.state.capsules;
+    return this.state.mode === 'learning' ? '캡슐' : '캡슐 ' + this.state.capsules;
   }
 
   private capsuleCountLabel(capsuleId: CapsuleId): string {
-    return this.state.mode === 'learning' ? '∞' : String(this.state.capsuleInventory[capsuleId] ?? 0);
+    return this.state.mode === 'learning' ? '' : `×${this.state.capsuleInventory[capsuleId] ?? 0}`;
   }
 
   private drawCapsuleRowButton(
@@ -1670,9 +1788,10 @@ export class BattleScene extends Phaser.Scene {
     label: string,
     onClick: () => void,
     active = false,
+    matchesTarget = false,
   ): void {
     const rect = this.add.rectangle(x, y, width, height, active ? BUTTON_ACTIVE_FILL : BUTTON_FILL).setOrigin(0);
-    rect.setStrokeStyle(2, active ? 0x72d6ff : COLORS.line);
+    rect.setStrokeStyle(active ? 3 : 2, active ? COLORS.focus : matchesTarget ? COLORS.selected : COLORS.border);
     rect.setInteractive({ useHandCursor: true });
     rect.on('pointerover', () => rect.setFillStyle(BUTTON_ACTIVE_FILL));
     rect.on('pointerout', () => rect.setFillStyle(active ? BUTTON_ACTIVE_FILL : BUTTON_FILL));
@@ -1690,17 +1809,22 @@ export class BattleScene extends Phaser.Scene {
         .setDisplaySize(28, 28);
     }
 
-    addLabel(this, x + 50, y + height / 2, countLabel, 14)
-      .setOrigin(0, 0.5)
-      .setAlpha(0.9);
-    addBoxLabel(this, x + 98, y + height / 2, label, {
-      width: width - 108,
+    if (countLabel) {
+      addLabel(this, x + 50, y + height / 2, countLabel, TEXT.label).setOrigin(0, 0.5);
+    }
+    const labelX = x + (countLabel ? 98 : 52);
+    addBoxLabel(this, labelX, y + height / 2, label, {
+      width: width - (labelX - x) - (matchesTarget ? 68 : 10),
       height: height - 8,
-      size: 14,
-      minSize: 10,
+      size: TEXT.body,
       maxLines: 1,
       origin: [0, 0.5],
     });
+    if (matchesTarget) {
+      addLabel(this, x + width - 12, y + height / 2, '포획 가능', TEXT.caption)
+        .setOrigin(1, 0.5)
+        .setColor('#9be7b4');
+    }
   }
 
   private formatDefenseTraits(monster: RuntimeMonster): string {
@@ -1712,6 +1836,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private openPartyView(): void {
+    this.partyNotice = undefined;
     this.partyCursor = Math.min(this.state.activeIndex, Math.max(0, this.state.party.length - 1));
     this.partyMenuOpen = false;
     this.partyMenuCursor = 0;
@@ -1725,6 +1850,10 @@ export class BattleScene extends Phaser.Scene {
     return 'switch';
   }
 
+  private currentPartyMenuOptions(): string[] {
+    return partyMenuOptions(this.partyPurpose(), canEvolvePartyMember(this.state, this.partyCursor));
+  }
+
   private drawPartyView(): void {
     this.clampPartyCursor();
     this.add.rectangle(0, 0, APP_WIDTH, APP_HEIGHT, 0x101a22).setOrigin(0);
@@ -1732,16 +1861,17 @@ export class BattleScene extends Phaser.Scene {
 
     const purpose = this.partyPurpose();
     const selected = this.state.party[this.partyCursor];
-    const prompt = purpose === 'release'
+    const prompt = this.partyNotice ?? (purpose === 'release'
       ? `${this.state.pendingCapture?.name ?? '새 패시몬'}을 데려가려면 놓아줄 패시몬을 선택하세요.`
       : purpose === 'forced'
         ? '다음에 내보낼 패시몬을 선택하세요.'
         : this.state.floor === 5 && this.state.enemy?.isTrainer
           ? '예고된 처치의 피해 배율이 낮은 패시몬으로 교체하세요.'
-          : '패시몬을 어떻게 하겠습니까?';
+          : '패시몬을 어떻게 하겠습니까?');
 
-    addLabel(this, 28, 22, purpose === 'release' ? '포획 교체' : '패시몬', 34);
-    this.drawFloorBadge();
+    addLabel(this, 28, 22, purpose === 'release' ? '포획 교체' : '패시몬', TEXT.display);
+    // 파티 카드가 x=476부터 시작해 우상단 기본 위치는 1번 슬롯을 덮는다.
+    this.drawFloorBadge(false, 336, 14);
     if (this.state.pendingCapture && purpose === 'release') {
       this.drawPendingCapturePreview(this.state.pendingCapture);
     }
@@ -1808,6 +1938,7 @@ export class BattleScene extends Phaser.Scene {
     rect.setStrokeStyle(selected ? 4 : 2, this.pathimonFrameBorderColor(monster, selected ? 0xffffff : 0x2ee9ff));
     rect.setInteractive({ useHandCursor: true });
     rect.on('pointerdown', () => {
+      this.partyNotice = undefined;
       this.partyCursor = index;
       if (this.state.phase === 'forcedSwitch') {
         this.handlePartySwitch(index);
@@ -1824,28 +1955,27 @@ export class BattleScene extends Phaser.Scene {
 
     const assets = pathimonSpriteAssets(monster, this.state.visualStyle);
     this.drawMonsterSprite(monster, assets.front, x + 34, y + 57, 0.72);
-    addBoxLabel(this, x + 78, y + 9, monster.name, { width: 200, height: 24, size: 19, minSize: 12, maxLines: 1 });
+    addBoxLabel(this, x + 78, y + 9, monster.name, { width: 200, height: 24, size: TEXT.heading, minSize: TEXT.label, maxLines: 1 });
     const stateLabel = index === this.state.activeIndex
-      ? '현재'
+      ? '출전 중'
       : monster.sealedByBoss
         ? '봉인'
         : unusable
           ? '기절'
           : '';
-    addBoxLabel(this, x + 78, y + 36, stateLabel, {
-      width: 90,
-      height: 16,
-      size: 12,
-      minSize: 9,
-      maxLines: 1,
-    }).setAlpha(0.78);
-    addLabel(this, x + 302, y + 12, 'HP', 15);
+    if (stateLabel) {
+      const chipFill = index === this.state.activeIndex ? COLORS.selected : COLORS.chipNeutral;
+      const chipColor = index === this.state.activeIndex ? '#10231a' : '#f4f0ff';
+      this.add.rectangle(x + 78, y + 34, 66, 22, chipFill, 0.95).setOrigin(0);
+      addLabel(this, x + 111, y + 45, stateLabel, TEXT.caption).setOrigin(0.5).setColor(chipColor);
+    }
+    addLabel(this, x + 302, y + 12, 'HP', TEXT.label);
     drawHpBar(this, x + 346, y + 22, 124, hpPct(monster));
-    addBoxLabel(this, x + 418, y + 34, `${monster.hp}/${monster.maxHp}`, { width: 74, height: 18, size: 13, minSize: 9, maxLines: 1 });
+    addBoxLabel(this, x + 418, y + 34, `${monster.hp}/${monster.maxHp}`, { width: 74, height: 20, size: TEXT.label, maxLines: 1 });
   }
 
-  private drawPartySubmenu(purpose: PartyMenuPurpose): void {
-    const options = partyMenuOptions(purpose);
+  private drawPartySubmenu(_purpose: PartyMenuPurpose): void {
+    const options = this.currentPartyMenuOptions();
     const x = 706;
     const y = Math.min(368, 92 + this.partyCursor * 54);
     const width = 250;
@@ -1874,6 +2004,16 @@ export class BattleScene extends Phaser.Scene {
 
     if (label === '교체한다') {
       this.handlePartySwitch(this.partyCursor);
+      return;
+    }
+
+    if (label === '진화한다') {
+      this.state = evolvePartyMember(this.state, this.partyCursor);
+      this.notice = this.state.lastLog;
+      this.partyNotice = this.state.lastLog;
+      this.partyMenuOpen = false;
+      this.partyMenuCursor = 0;
+      this.render();
       return;
     }
 
@@ -2138,9 +2278,17 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    if (this.viewMode === 'dex' && this.state.phase === 'battle' && (direction === 'left' || direction === 'right')) {
-      this.dexTab = this.dexTab === 'moves' ? 'effectiveness' : 'moves';
-      this.render();
+    if (this.viewMode === 'dex' && this.state.phase === 'battle') {
+      if (direction === 'left' || direction === 'right') {
+        this.dexTab = this.dexTab === 'moves' ? 'effectiveness' : 'moves';
+        this.dexRowCursor = 0;
+        this.render();
+        return;
+      }
+      if (this.dexTab === 'moves') {
+        this.dexRowCursor = Math.max(0, this.dexRowCursor + (direction === 'down' ? 1 : -1));
+        this.render();
+      }
     }
   }
 
@@ -2190,6 +2338,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private movePartyCursor(direction: Direction): void {
+    this.partyNotice = undefined;
     if (direction === 'up') this.partyCursor -= 1;
     if (direction === 'down') this.partyCursor += 1;
     if (direction === 'left') this.partyCursor = Math.max(0, this.partyCursor - 3);
@@ -2199,7 +2348,7 @@ export class BattleScene extends Phaser.Scene {
 
   private movePartyMenuCursor(direction: Direction): void {
     if (direction !== 'up' && direction !== 'down') return;
-    const optionCount = partyMenuOptions(this.partyPurpose()).length;
+    const optionCount = this.currentPartyMenuOptions().length;
     this.partyMenuCursor += direction === 'down' ? 1 : -1;
     this.partyMenuCursor = Math.min(optionCount - 1, Math.max(0, this.partyMenuCursor));
   }
@@ -2256,7 +2405,7 @@ export class BattleScene extends Phaser.Scene {
         return;
       }
 
-      const option = partyMenuOptions(this.partyPurpose())[this.partyMenuCursor];
+      const option = this.currentPartyMenuOptions()[this.partyMenuCursor];
       if (option) this.handlePartyMenuOption(option);
       return;
     }
@@ -2557,7 +2706,10 @@ export class BattleScene extends Phaser.Scene {
     this.scene.start('ModeSelectScene');
   }
 
+  // 가상 패드는 터치 기기에서만 그린다. 데스크톱에서도 그리면 대사·명령 버튼 위를 덮는다.
   private drawMobileOverlay(): void {
+    if (!this.mobileControlOverlayInteractive()) return;
+
     const depth = 900;
     const dpadX = 118;
     const dpadY = 500;
@@ -2573,28 +2725,28 @@ export class BattleScene extends Phaser.Scene {
 
     this.drawActionOverlayButton(896, 452, 48, 'A', () => this.handleConfirmInput(), depth + 1);
     this.drawActionOverlayButton(802, 510, 44, 'B', () => this.handleCancelInput(), depth + 1);
+  }
+
+  // 파티·스테이터스 화면에는 자체 복귀 버튼이 있어 겹침을 피하려 전투 화면에서만 띄운다.
+  private drawHomeButton(): void {
     const homeButton = mobileHomeButtonLayout();
     this.drawOverlayTextButton(homeButton.x, homeButton.y, homeButton.width, homeButton.height, homeButton.label, () => {
       this.returnToModeSelect();
-    }, depth + 1, true);
+    }, 901, true);
   }
 
   private drawOverlayHitArea(x: number, y: number, width: number, height: number, direction: Direction, label: string, depth: number): void {
     const hit = this.add.rectangle(x, y, width, height, OVERLAY_FILL, 0.02).setDepth(depth);
-    if (this.mobileControlOverlayInteractive()) {
-      hit.setInteractive({ useHandCursor: true });
-      hit.on('pointerdown', () => this.handleDirectionalInput(direction));
-    }
-    addLabel(this, x, y, label, 20).setOrigin(0.5).setAlpha(0.3).setDepth(depth + 1);
+    hit.setInteractive({ useHandCursor: true });
+    hit.on('pointerdown', () => this.handleDirectionalInput(direction));
+    addLabel(this, x, y, label, TEXT.heading).setOrigin(0.5).setAlpha(0.55).setDepth(depth + 1);
   }
 
   private drawActionOverlayButton(x: number, y: number, radius: number, label: string, onClick: () => void, depth: number): void {
     const circle = this.add.circle(x, y, radius, OVERLAY_FILL, 0.27).setStrokeStyle(2, OVERLAY_STROKE, 0.22).setDepth(depth);
-    if (this.mobileControlOverlayInteractive()) {
-      circle.setInteractive({ useHandCursor: true });
-      circle.on('pointerdown', onClick);
-    }
-    addLabel(this, x, y, label, 30).setOrigin(0.5).setTint(OVERLAY_TEXT).setAlpha(0.72).setDepth(depth + 1);
+    circle.setInteractive({ useHandCursor: true });
+    circle.on('pointerdown', onClick);
+    addLabel(this, x, y, label, TEXT.display).setOrigin(0.5).setTint(OVERLAY_TEXT).setAlpha(0.72).setDepth(depth + 1);
   }
 
   private drawLockedMoveOverlay(x: number, y: number, width: number, height: number): void {
@@ -2620,13 +2772,16 @@ export class BattleScene extends Phaser.Scene {
     depth: number,
     interactive: boolean,
   ): void {
-    const rect = this.add.rectangle(x, y, width, height, OVERLAY_FILL, 0.2).setOrigin(0).setDepth(depth);
-    rect.setStrokeStyle(1, OVERLAY_STROKE, 0.22);
+    const rect = this.add.rectangle(x, y, width, height, COLORS.panelDark, 0.9).setOrigin(0).setDepth(depth);
+    rect.setStrokeStyle(2, COLORS.border);
     if (interactive) {
       rect.setInteractive({ useHandCursor: true });
       rect.on('pointerdown', onClick);
     }
-    addLabel(this, x + width / 2, y + height / 2, label, 12).setOrigin(0.5).setTint(OVERLAY_TEXT).setAlpha(0.76).setDepth(depth + 1);
+    addLabel(this, x + width / 2, y + height / 2, label, TEXT.caption)
+      .setOrigin(0.5)
+      .setColor(COLORS.muted)
+      .setDepth(depth + 1);
   }
 
   private mobileControlOverlayInteractive(): boolean {
@@ -2651,7 +2806,7 @@ export class BattleScene extends Phaser.Scene {
     disabled = false,
   ): void {
     const rect = this.add.rectangle(x, y, width, height, disabled ? COLORS.panelDark : active ? BUTTON_ACTIVE_FILL : BUTTON_FILL).setOrigin(0);
-    rect.setStrokeStyle(2, active ? 0x72d6ff : COLORS.line);
+    rect.setStrokeStyle(active ? 3 : 2, active ? COLORS.focus : COLORS.border);
 
     if (!disabled) {
       rect.setInteractive({ useHandCursor: true });

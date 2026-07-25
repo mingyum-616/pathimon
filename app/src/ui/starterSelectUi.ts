@@ -50,9 +50,10 @@ export function starterCandidateRolls(random: () => number = Math.random): numbe
 }
 
 export function starterCapsuleSlots(): StarterCapsuleSlot[] {
+  // 세 슬롯의 y를 맞춘다. 가운데만 20px 낮으면 정렬 실수처럼 보인다.
   return [
     { x: 356, y: 248, markerY: 206 },
-    { x: 512, y: 268, markerY: 206 },
+    { x: 512, y: 248, markerY: 206 },
     { x: 668, y: 248, markerY: 206 },
   ];
 }

@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { playIntroBgm, queueIntroBgm } from '../audio/introBgm';
 import { APP_HEIGHT, APP_WIDTH, COLORS } from '../game/constants';
 import type { RunMode, VisualStyle } from '../types/game';
-import { addLabel, drawPanel } from '../ui/draw';
+import { addLabel, addSelectedBadge, applySelectionStyle, drawPanel } from '../ui/draw';
+import { TEXT } from '../ui/typography';
 import {
   modeSelectButtonOptions,
   resolveModeSelectChoice,
@@ -52,12 +53,12 @@ export class ModeSelectScene extends Phaser.Scene {
     this.add.rectangle(0, 0, APP_WIDTH, APP_HEIGHT, COLORS.ink).setOrigin(0);
     drawPanel(this, 96, 48, 832, 480);
     this.add.rectangle(122, 76, 6, 64, ACTIVE_LINE).setOrigin(0);
-    addLabel(this, 146, 72, '모드 선택', 34);
-    addLabel(this, 148, 116, '진행 방식과 디자인을 선택합니다.', 17).setAlpha(0.78);
-    this.add.rectangle(142, 154, 740, 2, COLORS.line, 0.55).setOrigin(0);
+    addLabel(this, 146, 72, '모드 선택', TEXT.display);
+    addLabel(this, 148, 116, '진행 방식과 디자인을 각각 하나씩 고르세요.', TEXT.body).setColor(COLORS.muted);
+    this.add.rectangle(142, 154, 740, 2, COLORS.border, 0.9).setOrigin(0);
 
-    addLabel(this, 142, 174, '01  진행 방식', 15).setColor('#72d6ff').setAlpha(0.92);
-    addLabel(this, 142, 366, '02  디자인', 15).setColor('#72d6ff').setAlpha(0.92);
+    addLabel(this, 142, 174, '01  진행 방식', TEXT.label).setColor('#72d6ff');
+    addLabel(this, 142, 366, '02  디자인', TEXT.label).setColor('#72d6ff');
 
     const options = modeSelectButtonOptions();
     options.slice(0, 2).forEach((option, index) => {
@@ -76,25 +77,18 @@ export class ModeSelectScene extends Phaser.Scene {
     index: number,
   ): void {
     const selected = this.isSelected(option);
-    const rect = this.add.rectangle(
-      x,
-      y,
-      MODE_BUTTON_WIDTH,
-      MODE_BUTTON_HEIGHT,
-      selected ? SELECTED_FILL : COLORS.panelDark,
-    ).setOrigin(0);
     const focused = !this.startCursor && index === this.optionCursor;
-    rect.setStrokeStyle(focused ? 4 : 2, selected || focused ? ACTIVE_LINE : COLORS.line);
-    this.configureButton(rect, option, index, selected, COLORS.panelDark);
+    const rect = this.add.rectangle(x, y, MODE_BUTTON_WIDTH, MODE_BUTTON_HEIGHT).setOrigin(0);
+    applySelectionStyle(rect, { focused, selected }, { idle: COLORS.panelDark, selected: SELECTED_FILL });
+    this.configureButton(rect, option, index);
 
-    this.add.rectangle(x + 16, y + 18, 5, 80, selected ? ACTIVE_LINE : COLORS.line, 0.92).setOrigin(0);
-    addLabel(this, x + 38, y + 16, option.label, 23).setWordWrapWidth(MODE_BUTTON_WIDTH - 64);
+    this.add.rectangle(x + 16, y + 18, 5, 80, selected ? COLORS.selected : COLORS.borderStrong, 0.92).setOrigin(0);
+    addLabel(this, x + 38, y + 16, option.label, TEXT.title).setWordWrapWidth(MODE_BUTTON_WIDTH - 128);
     option.lines.forEach((line, lineIndex) =>
-      addLabel(this, x + 38, y + 54 + lineIndex * 20, line, 13)
-        .setAlpha(0.88)
+      addLabel(this, x + 38, y + 56 + lineIndex * 21, line, TEXT.label)
         .setWordWrapWidth(MODE_BUTTON_WIDTH - 64),
     );
-    if (selected) addLabel(this, x + MODE_BUTTON_WIDTH - 74, y + 18, '선택됨', 11).setColor('#72d6ff');
+    if (selected) addSelectedBadge(this, x + MODE_BUTTON_WIDTH - 92, y + 14);
   }
 
   private createStyleButton(
@@ -104,20 +98,14 @@ export class ModeSelectScene extends Phaser.Scene {
     index: number,
   ): void {
     const selected = this.isSelected(option);
-    const rect = this.add.rectangle(
-      x,
-      y,
-      STYLE_BUTTON_WIDTH,
-      STYLE_BUTTON_HEIGHT,
-      selected ? SELECTED_FILL : 0x211c2d,
-    ).setOrigin(0);
     const focused = !this.startCursor && index === this.optionCursor;
-    rect.setStrokeStyle(focused ? 4 : 2, selected || focused ? ACTIVE_LINE : COLORS.line);
-    this.configureButton(rect, option, index, selected, 0x211c2d);
+    const rect = this.add.rectangle(x, y, STYLE_BUTTON_WIDTH, STYLE_BUTTON_HEIGHT).setOrigin(0);
+    applySelectionStyle(rect, { focused, selected }, { idle: 0x211c2d, selected: SELECTED_FILL });
+    this.configureButton(rect, option, index);
 
-    this.add.rectangle(x + 16, y + 13, 8, 28, selected ? ACTIVE_LINE : COLORS.line, 0.92).setOrigin(0);
-    addLabel(this, x + 42, y + 14, option.label, 19);
-    if (selected) addLabel(this, x + STYLE_BUTTON_WIDTH - 66, y + 18, '선택됨', 10).setColor('#72d6ff');
+    this.add.rectangle(x + 16, y + 13, 8, 28, selected ? COLORS.selected : COLORS.borderStrong, 0.92).setOrigin(0);
+    addLabel(this, x + 42, y + 14, option.label, TEXT.heading);
+    if (selected) addSelectedBadge(this, x + STYLE_BUTTON_WIDTH - 92, y + 15);
   }
 
   private createStartButton(): void {
@@ -126,14 +114,15 @@ export class ModeSelectScene extends Phaser.Scene {
     const y = 468;
     const width = 344;
     const height = 42;
-    const rect = this.add.rectangle(x, y, width, height, enabled ? 0x181522 : 0x252331, 0.96)
+    const rect = this.add.rectangle(x, y, width, height, enabled ? 0x1d4a34 : 0x252331, 0.96)
       .setOrigin(0)
-      .setStrokeStyle(this.startCursor ? 4 : 2, this.startCursor ? ACTIVE_LINE : COLORS.line, enabled ? 0.94 : 0.36);
-    rect.setAlpha(enabled ? 1 : 0.54);
+      .setStrokeStyle(this.startCursor && enabled ? 4 : 2, enabled ? COLORS.selected : COLORS.border, enabled ? 0.94 : 0.5);
+    rect.setAlpha(enabled ? 1 : 0.6);
 
     if (enabled) {
       rect.setInteractive({ useHandCursor: true });
       rect.on('pointerover', () => {
+        if (this.startCursor) return;
         this.startCursor = true;
         this.render();
       });
@@ -143,22 +132,26 @@ export class ModeSelectScene extends Phaser.Scene {
     const modeLabel = this.choice.mode === 'learning' ? '학습모드' : this.choice.mode === 'challenge' ? '도전모드' : '';
     const styleLabel = this.choice.visualStyle === 'character' ? '캐릭터풍' : this.choice.visualStyle === 'micro' ? '실사풍' : '';
     const selection = enabled ? `${modeLabel} · ${styleLabel}` : '두 항목을 선택해주세요';
-    addLabel(this, x + 20, y + height / 2, '게임 시작', 17).setOrigin(0, 0.5);
-    addLabel(this, x + width - 18, y + height / 2, selection, 12)
+    addLabel(this, x + 20, y + height / 2, '게임 시작', TEXT.heading).setOrigin(0, 0.5);
+    addLabel(this, x + width - 18, y + height / 2, selection, TEXT.label)
       .setOrigin(1, 0.5)
-      .setColor(enabled ? '#dff7ff' : '#aaa5b5');
+      .setColor(enabled ? '#dff7ff' : '#c8c2d6');
   }
 
+  // 호버는 포커스 테두리만 바꾼다. 예전처럼 채움까지 선택색으로 바꾸면
+  // 마우스를 올린 카드가 이미 선택된 것처럼 보여 '게임 시작'이 왜 안 되는지 알 수 없다.
   private configureButton(
     rect: Phaser.GameObjects.Rectangle,
     option: ModeSelectOption,
     index: number,
-    selected: boolean,
-    idleFill: number,
   ): void {
     rect.setInteractive({ useHandCursor: true });
-    rect.on('pointerover', () => rect.setFillStyle(SELECTED_FILL));
-    rect.on('pointerout', () => rect.setFillStyle(selected ? SELECTED_FILL : idleFill));
+    rect.on('pointerover', () => {
+      if (this.optionCursor === index && !this.startCursor) return;
+      this.optionCursor = index;
+      this.startCursor = false;
+      this.render();
+    });
     rect.on('pointerdown', () => {
       this.optionCursor = index;
       this.handleOptionPress(option);
