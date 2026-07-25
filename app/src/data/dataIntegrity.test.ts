@@ -416,7 +416,7 @@ describe('Pathimon data', () => {
 
     expect(boss.maxHp).toBe(BOSSES[0].maxHp * 104);
     expect(boss.hp).toBe(BOSSES[0].maxHp * 104);
-    expect(boss.attack).toBe(30);
+    expect(boss.attack).toBe(40);
   });
 
   it('starts boss encounters without pre-existing symptoms', () => {
@@ -432,6 +432,7 @@ describe('Pathimon data', () => {
     // 1/5은 트레이너 전투가 2턴으로 너무 짧아 1/4로 올렸다. 스탯은 보스와 동일하고 HP만 다르다.
     expect(trainer.maxHp).toBe(Math.round(boss.maxHp / 4));
     expect(trainer.hp).toBe(Math.round(boss.maxHp / 4));
+    expect(trainer.attack).toBe(40);
     expect(trainer.attack).toBe(boss.attack);
     expect(trainer.defense).toBe(boss.defense);
   });

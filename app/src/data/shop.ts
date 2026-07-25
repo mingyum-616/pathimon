@@ -79,14 +79,14 @@ const FIXED_TEMPLATES: ShopItemTemplate[] = [
   {
     kind: 'rareCandy',
     name: '이상한 사탕',
-    price: 3,
+    price: 2,
     imagePath: 'images/items/rare_candy.png',
     description: '패시몬 1마리의 전용기를 해금합니다.',
   },
   {
     kind: 'evolutionStone',
     name: '진화의 돌',
-    price: 3,
+    price: 2,
     imagePath: 'images/items/evolution_stone.png',
     description: '패시몬 1마리를 진화시킵니다.',
   },

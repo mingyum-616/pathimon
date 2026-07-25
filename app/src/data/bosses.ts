@@ -18,10 +18,10 @@ const BOSS_MOVES: BossData['movePool'] = BOSS_ATTACK_MOVE_IDS;
 export const LATE_GAME_BOSS_IDS: string[] = ['prof_p', 'prof_s', 'prof_k', 'prof_w'];
 
 // 보스·트레이너는 스탯과 기술 위력을 공유하고 트레이너만 HP를 1/4로 줄인다(state/factory.ts).
-// v2 테스트 결과 공격력 136은 초반부터 과도해, 기술 위력은 유지하고 공격력을 30으로 낮췄다.
+// v2 테스트 결과 공격력 136은 초반부터 과도해, 기술 위력은 유지하고 공격력을 40으로 낮췄다.
 // 방어 8은 플레이어 화력을 방어 6 대비 25% 낮춰 보스 전투를 길게 만든다.
 export const BOSS_COMBAT_STATS = {
-  attack: 30,
+  attack: 40,
   defense: 8,
 } as const;
 

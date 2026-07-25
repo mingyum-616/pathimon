@@ -22,8 +22,8 @@ describe('maintenance shop data', () => {
 
     expect(inventory.find((item) => item.id === 'slot-potion-a')?.price).toBe(1);
     expect(inventory.find((item) => item.id === 'slot-potion-b')?.price).toBe(3);
-    expect(inventory.find((item) => item.id === 'slot-rare-candy')?.price).toBe(3);
-    expect(inventory.find((item) => item.id === 'slot-evolution-stone')?.price).toBe(3);
+    expect(inventory.find((item) => item.id === 'slot-rare-candy')?.price).toBe(2);
+    expect(inventory.find((item) => item.id === 'slot-evolution-stone')?.price).toBe(2);
     expect(inventory.find((item) => item.id === 'slot-potion-a')?.description).toContain('선택한 패시몬 1마리');
     expect(inventory.find((item) => item.id === 'slot-potion-b')?.description).toContain('모든 패시몬');
     expect(inventory.find((item) => item.id === 'slot-rare-candy')?.description).toContain('전용기를 해금');

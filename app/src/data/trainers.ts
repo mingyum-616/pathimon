@@ -7,7 +7,7 @@ const HOST_LABEL = '일반 사람 (Human Host)';
 // 트레이너는 보스와 **완전히 같은 기술 풀**(BOSS_ATTACK_MOVE_IDS)을 쓴다. 차이는 HP와 방어특성(트레이너는 없음)뿐이다(state/factory.ts).
 // 과거의 테마별 코어(PHAGO_CORE 등)는 폐기했다 — 적은 매 턴 전체 풀에서 ×4/×2/×1을 1/3씩 뽑는다(battle/bossMatchup.ts chooseBossMove).
 export const TRAINER_COMBAT_STATS = {
-  attack: 30,
+  attack: 40,
   defense: 8,
 } as const;
 
