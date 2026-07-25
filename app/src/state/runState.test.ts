@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { MonsterData, RunState } from '../types/game';
 import {
   beginCaptureQuiz,
@@ -360,46 +360,36 @@ describe('run state loop', () => {
     expect(result.lastLog).not.toContain('학습 피드백');
   });
 
-  it('spends a capsule before the OX quiz and applies the original capture rate after a correct answer', () => {
+  it('spends a capsule before the OX quiz and guarantees capture after a correct answer', () => {
     const battle = enterBattle(createInitialRunState('challenge'));
     if (!battle.enemy) throw new Error('enemy missing');
-    battle.enemy.captureRate = 0.4;
+    battle.enemy.captureRate = 0.01;
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.99);
 
     const quiz = beginCaptureQuiz(battle, 'universal');
-    const missed = resolveCaptureQuizAnswer(quiz, true, 0.8);
+    const captured = resolveCaptureQuizAnswer(quiz, true);
+    random.mockRestore();
 
     expect(quiz.capsuleInventory.universal).toBe(4);
     expect(quiz.pendingCaptureCapsuleId).toBe('universal');
-    expect(missed.phase).toBe('battle');
-    expect(missed.party).toHaveLength(1);
-    expect(missed.lastLog).toContain('빠져나왔다');
-  });
-
-  it('captures after a correct answer when the capture roll succeeds', () => {
-    const battle = enterBattle(createInitialRunState('challenge'));
-    if (!battle.enemy) throw new Error('enemy missing');
-    battle.enemy.captureRate = 0.4;
-
-    const quiz = beginCaptureQuiz(battle, 'universal');
-    const captured = resolveCaptureQuizAnswer(quiz, true, 0.2);
-
     expect(captured.phase).toBe('floorClear');
     expect(captured.party).toHaveLength(2);
   });
 
-  it('deals half max HP for a wrong answer and forces a switch when the pathimon faints', () => {
-    const battle = enterBattle(createInitialRunState('challenge'));
-    battle.party.push({ ...battle.party[0], templateId: 'bench', name: '대기몬' });
+  it.each([
+    ['learning', 0.2, '20%'],
+    ['challenge', 0.4, '40%'],
+  ] as const)('deals mode-specific max HP damage for a wrong answer in %s mode', (mode, ratio, label) => {
+    const battle = enterBattle(createInitialRunState(mode));
+    const actor = battle.party[0];
+    const expectedDamage = Math.ceil(actor.maxHp * ratio);
 
-    const firstQuiz = beginCaptureQuiz(battle, 'universal');
-    const firstWrong = resolveCaptureQuizAnswer(firstQuiz, false, 0);
-    const secondQuiz = beginCaptureQuiz(firstWrong, 'universal');
-    const secondWrong = resolveCaptureQuizAnswer(secondQuiz, false, 0);
+    const quiz = beginCaptureQuiz(battle, 'universal');
+    const wrong = resolveCaptureQuizAnswer(quiz, false);
 
-    expect(firstWrong.party[0].hp).toBe(Math.floor(firstWrong.party[0].maxHp / 2));
-    expect(secondWrong.party[0].hp).toBe(0);
-    expect(secondWrong.phase).toBe('forcedSwitch');
-    expect(secondWrong.lastLog).toContain('쓰러졌');
+    expect(wrong.party[0].hp).toBe(actor.maxHp - expectedDamage);
+    expect(wrong.phase).toBe('battle');
+    expect(wrong.lastLog).toContain(`최대 체력의 ${label} 피해`);
   });
 
   it('blocks capture before spending when the selected capsule does not match the pathogen tag', () => {

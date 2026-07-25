@@ -1,4 +1,4 @@
-import { captureChance, rollsCapture, tryCapture } from './capture';
+import { tryCapture } from './capture';
 import { calculateDamage, randomDamageVariance, rollsCriticalHit, type DamageResult } from './damage';
 import { applyAttackTriggeredStatusDamage, applyEffects, tickEffects } from './effects';
 import { ABILITIES } from '../data/abilities';
@@ -950,7 +950,7 @@ export function beginCaptureQuiz(state: RunState, capsuleId: CapsuleId): RunStat
   return nextState;
 }
 
-export function resolveCaptureQuizAnswer(state: RunState, correct: boolean, roll = Math.random()): RunState {
+export function resolveCaptureQuizAnswer(state: RunState, correct: boolean): RunState {
   const nextState = cloneState(state);
   const enemy = nextState.enemy;
   const capsuleId = nextState.pendingCaptureCapsuleId;
@@ -963,25 +963,21 @@ export function resolveCaptureQuizAnswer(state: RunState, correct: boolean, roll
   }
 
   if (correct) {
-    if (rollsCapture(enemy, roll)) {
-      return completeCapturedEnemy(nextState, enemy);
-    }
-
-    nextState.phase = 'battle';
-    nextState.lastLog = `${enemy.name}이 캡슐에서 빠져나왔다. 포획 확률은 ${Math.round(captureChance(enemy) * 100)}%였다.`;
-    return nextState;
+    return completeCapturedEnemy(nextState, enemy);
   }
 
   const actor = nextState.party[nextState.activeIndex];
   if (!actor) return nextState;
 
-  const damage = Math.ceil(actor.maxHp * 0.5);
+  const damageRatio = nextState.mode === 'learning' ? 0.2 : 0.4;
+  const damagePercent = Math.round(damageRatio * 100);
+  const damage = Math.ceil(actor.maxHp * damageRatio);
   markDamage(actor, damage);
   actor.fainted = actor.hp <= 0;
   nextState.phase = 'battle';
   nextState.lastEnemyHitEffectiveness = 'normal';
   nextState.lastPlayerHitEffectiveness = undefined;
-  nextState.battleActionLog = `${enemy.name}이 질문을 던졌다.\n오답이다! ${actor.name}은 최대 체력의 50% 피해를 입었다.`;
+  nextState.battleActionLog = `${enemy.name}이 질문을 던졌다.\n오답이다! ${actor.name}은 최대 체력의 ${damagePercent}% 피해를 입었다.`;
   nextState.battleStatusLog = undefined;
   nextState.battleStatusDamage = undefined;
   nextState.lastLog = nextState.battleActionLog;

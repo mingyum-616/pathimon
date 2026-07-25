@@ -2397,7 +2397,7 @@ export class BattleScene extends Phaser.Scene {
 
     const correct = result.correct;
     const previousState = this.state;
-    this.state = resolveCaptureQuizAnswer(this.state, correct, Math.random());
+    this.state = resolveCaptureQuizAnswer(this.state, correct);
     this.notice = this.state.battleResultLog ?? this.state.lastLog;
     this.captureQuiz = undefined;
     this.captureQuizResult = undefined;
