@@ -2,7 +2,12 @@ import type { BossData } from '../types/game';
 import { BOSS_ATTACK_MOVE_IDS } from './bossAttackMatchups';
 import { BOSS_CHARACTER_ASSETS, assetIdFromPath, characterAssetPathForId } from './characterAssets';
 
+// 보스 난도는 여기서 나온다. `selectBossAbilities`(state/factory.ts)가 10층마다 1개씩 더 뽑고
+// 시작 위치는 보스 순번이라, 층이 깊어질수록 겹치는 축이 늘어 파티 편식이 그대로 화력 손실이 된다.
+// 축을 섞어 두면 "한 계열로만 파티를 채우면 후반에 막힌다"가 자연스럽게 학습된다.
+// 누적 반감은 battle/effectiveness.ts RESISTANCE_FLOOR(0.25)에서 멈춘다.
 const BOSS_ABILITIES: BossData['abilityPool'] = [
+  // 숙주 장벽(기존)
   'epithelial_barrier',
   'mucociliary',
   'gastric_acid',
@@ -11,6 +16,29 @@ const BOSS_ABILITIES: BossData['abilityPool'] = [
   'antitoxin',
   'receptor_defect',
   'immune_regulation',
+  // 계열 축
+  'parasite_master',
+  'virology_master',
+  'bacteriology_master',
+  'mycology_master',
+  'protozoology_master',
+  // 감염 경로 축
+  'mask',
+  'hand_hygiene',
+  'food_safety',
+  'safer_sex',
+  'blood_screening',
+  'wound_asepsis',
+  'vector_control',
+  // 구조 축
+  'lysozyme',
+  'endotoxin_neutralization',
+  'alcohol_disinfection',
+  'bcg_memory',
+  // 위치·크기 축
+  'ctl_surveillance',
+  'humoral_patrol',
+  'eosinophil_recruitment',
 ];
 
 const BOSS_MOVES: BossData['movePool'] = BOSS_ATTACK_MOVE_IDS;
@@ -18,10 +46,12 @@ const BOSS_MOVES: BossData['movePool'] = BOSS_ATTACK_MOVE_IDS;
 export const LATE_GAME_BOSS_IDS: string[] = ['prof_p', 'prof_s', 'prof_k', 'prof_w'];
 
 // 보스·트레이너는 스탯과 기술 위력을 공유하고 트레이너만 HP를 1/4로 줄인다(state/factory.ts).
-// v2 테스트 결과 공격력 136은 초반부터 과도해, 기술 위력은 유지하고 공격력을 40으로 낮췄다.
+// v2 테스트 결과 공격력 136은 초반부터 과도해, 기술 위력은 유지하고 공격력을 낮췄다.
+// 40에서는 ×2 처치를 맞아도 최대 체력의 30% 남짓이라 예고를 무시하고 밀어붙여도 버텨졌다.
+// 60으로 올려 ×2 한 방의 무게를 키운다. 교체 판단이 실제로 손해를 막는 선택이 되게 한다.
 // 방어 8은 플레이어 화력을 방어 6 대비 25% 낮춰 보스 전투를 길게 만든다.
 export const BOSS_COMBAT_STATS = {
-  attack: 40,
+  attack: 60,
   defense: 8,
 } as const;
 

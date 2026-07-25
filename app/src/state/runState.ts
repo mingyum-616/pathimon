@@ -4,6 +4,7 @@ import { TRAINERS } from '../data/trainers';
 import { createMaintenanceInventory } from '../data/shop';
 import { addCapsule, cloneCapsuleInventory, createInitialCapsuleInventory, totalCapsules } from '../data/capsules';
 import { chooseBossMove, createBossDefenseProfile } from '../battle/bossMatchup';
+import { withParticle } from '../game/text';
 import type { EncounterKind, MonsterData, RunMode, RunState, RuntimeMonster, ShopItem, VisualStyle } from '../types/game';
 import { createBossInstance, createMonsterInstance, createTrainerInstance } from './factory';
 
@@ -57,6 +58,7 @@ function healMonster(monster: RuntimeMonster): RuntimeMonster {
 function prepareMonsterForBattle(monster: RuntimeMonster, mode: RunMode): RuntimeMonster {
   const prepared = mode === 'learning' ? healMonster(monster) : cloneMonster(monster);
   prepared.usedSignatureMoveIds = [];
+  prepared.enteredCurrentBattle = false;
   return prepared;
 }
 
@@ -235,7 +237,7 @@ export function enterBattle(state: RunState, enemyIndex?: number): RunState {
     nextState.enemy = createBossInstance(bossIndex, nextState.floor);
     planInitialHumanMove(nextState);
     nextState.phase = 'bossIntro';
-    nextState.lastLog = `${nextState.enemy.name}이 길을 막아섰다.`;
+    nextState.lastLog = `${withParticle(nextState.enemy.name, '이')} 길을 막아섰다.`;
     return nextState;
   }
 
@@ -244,14 +246,14 @@ export function enterBattle(state: RunState, enemyIndex?: number): RunState {
     nextState.enemy = createTrainerInstance(trainerIndex);
     planInitialHumanMove(nextState);
     nextState.phase = 'battle';
-    nextState.lastLog = `${nextState.enemy.name}이 승부를 걸어왔다.`;
+    nextState.lastLog = `${withParticle(nextState.enemy.name, '이')} 승부를 걸어왔다.`;
     return nextState;
   }
 
   const enemyData = selectWildMonster(enemyIndex, nextState.floor, nextState.wildRosterIds);
   nextState.enemy = createMonsterInstance(enemyData);
   nextState.phase = 'battle';
-  nextState.lastLog = `${nextState.enemy.name}이 나타났다.`;
+  nextState.lastLog = `${withParticle(nextState.enemy.name, '이')} 나타났다.`;
   return nextState;
 }
 
@@ -315,7 +317,7 @@ export function healPartyMember(state: RunState, partyIndex: number): RunState {
   if (!canHealPartyMember(clonedTarget)) {
     return {
       ...nextState,
-      lastLog: `${clonedTarget.name}은 이미 회복된 상태입니다.`,
+      lastLog: `${withParticle(clonedTarget.name, '은')} 이미 회복된 상태입니다.`,
     };
   }
 
@@ -333,6 +335,68 @@ export function canUseEvolutionStoneOnPartyMember(
   const target = state.party[partyIndex];
   if (!target) return false;
   return Boolean(evolutionTargetForMonster(target, monsterCatalog));
+}
+
+// 정비구역이 없는 학습모드에도 성장 축을 남기려고 파티 화면에서 무료로 진화시킨다.
+// 진화의 돌(상점)과 달리 비용·아이템이 없고 턴도 소비하지 않는다.
+// 다만 잡자마자 최종 단계로 올려버리면 유충·충란 단계가 통과의례가 되므로, 그 패시몬으로 전투를 한 번 끝내야 한다.
+export const EVOLUTION_REQUIRED_BATTLES = 1;
+
+export function canEvolvePartyMember(
+  state: RunState,
+  partyIndex: number,
+  monsterCatalog: MonsterData[] = MONSTERS,
+): boolean {
+  return canUseEvolutionStoneOnPartyMember(state, partyIndex, monsterCatalog);
+}
+
+// 진화 대상이 있는지(canEvolvePartyMember)와 지금 당장 진화 가능한지는 다르다.
+// 메뉴는 항목을 계속 보여주되 조건 미달이면 비활성으로 그리려고 둘을 나눈다.
+export function isEvolutionReadyForPartyMember(
+  state: RunState,
+  partyIndex: number,
+  monsterCatalog: MonsterData[] = MONSTERS,
+): boolean {
+  if (!canEvolvePartyMember(state, partyIndex, monsterCatalog)) return false;
+  return (state.party[partyIndex]?.battlesCompleted ?? 0) >= EVOLUTION_REQUIRED_BATTLES;
+}
+
+export function evolutionRequirementText(): string {
+  return `전투를 ${EVOLUTION_REQUIRED_BATTLES}번 치르면 진화할 수 있습니다.`;
+}
+
+export function evolvePartyMember(
+  state: RunState,
+  partyIndex: number,
+  monsterCatalog: MonsterData[] = MONSTERS,
+): RunState {
+  const nextState: RunState = {
+    ...state,
+    party: state.party.map(cloneMonster),
+  };
+  const target = nextState.party[partyIndex];
+
+  if (!target) {
+    nextState.lastLog = '진화시킬 패시몬이 없습니다.';
+    return nextState;
+  }
+
+  const evolutionTarget = evolutionTargetForMonster(target, monsterCatalog);
+  if (!evolutionTarget) {
+    nextState.lastLog = `${withParticle(target.name, '은')} 진화할 수 없습니다.`;
+    return nextState;
+  }
+
+  // 조건은 미리 표시하지 않는다. 눌렀을 때만 한 번 안내한다.
+  if ((target.battlesCompleted ?? 0) < EVOLUTION_REQUIRED_BATTLES) {
+    nextState.lastLog = `${withParticle(target.name, '은')} 아직 전투 경험이 없습니다. 전투를 한 번 치르면 진화할 수 있습니다.`;
+    return nextState;
+  }
+
+  const evolved = evolveMonster(target, evolutionTarget, nextState.mode);
+  nextState.party[partyIndex] = evolved;
+  nextState.lastLog = `${withParticle(target.name, '이')} ${withParticle(evolved.name, '으로')} 진화했습니다.`;
+  return nextState;
 }
 
 export function canUseRareCandyOnPartyMember(state: RunState, partyIndex: number): boolean {
@@ -363,7 +427,7 @@ export function purchaseShopItem(state: RunState, itemId: string): RunState {
   if (item.purchased) {
     return {
       ...nextState,
-      lastLog: `${item.name}은 이미 구매했습니다.`,
+      lastLog: `${withParticle(item.name, '은')} 이미 구매했습니다.`,
     };
   }
 
@@ -377,7 +441,7 @@ export function purchaseShopItem(state: RunState, itemId: string): RunState {
   if (item.kind === 'potion' || item.kind === 'rareCandy' || item.kind === 'evolutionStone') {
     return {
       ...nextState,
-      lastLog: `${item.name}을 사용할 패시몬을 선택하세요.`,
+      lastLog: `${withParticle(item.name, '을')} 사용할 패시몬을 선택하세요.`,
     };
   }
 
@@ -392,17 +456,17 @@ export function purchaseShopItem(state: RunState, itemId: string): RunState {
 
     nextState.capsuleInventory = addCapsule(nextState.capsuleInventory, item.capsuleId, 1);
     nextState.capsules = totalCapsules(nextState.capsuleInventory);
-    nextState.lastLog = `${item.name}을 획득했습니다.`;
+    nextState.lastLog = `${withParticle(item.name, '을')} 획득했습니다.`;
     return nextState;
   }
 
   if (item.kind === 'advancedPotion') {
     nextState.party = healAllPartyMembers(nextState);
-    nextState.lastLog = `${item.name}으로 모든 패시몬을 회복했습니다.`;
+    nextState.lastLog = `${withParticle(item.name, '으로')} 모든 패시몬을 회복했습니다.`;
     return nextState;
   }
 
-  nextState.lastLog = `${item.name}은 아직 기능 준비 중입니다.`;
+  nextState.lastLog = `${withParticle(item.name, '은')} 아직 기능 준비 중입니다.`;
   return nextState;
 }
 
@@ -434,7 +498,7 @@ export function purchaseShopItemForPartyMember(
   if (item.purchased) {
     return {
       ...nextState,
-      lastLog: `${item.name}은 이미 구매했습니다.`,
+      lastLog: `${withParticle(item.name, '은')} 이미 구매했습니다.`,
     };
   }
 
@@ -457,7 +521,7 @@ export function purchaseShopItemForPartyMember(
     if (!canHealPartyMember(target)) {
       return {
         ...nextState,
-        lastLog: `${target.name}은 이미 회복된 상태입니다.`,
+        lastLog: `${withParticle(target.name, '은')} 이미 회복된 상태입니다.`,
       };
     }
 
@@ -490,17 +554,17 @@ export function purchaseShopItemForPartyMember(
       nextState.money = Math.max(0, state.money - item.price);
       inventory[itemIndex] = { ...item, purchased: true };
       nextState.party[partyIndex] = evolved;
-      nextState.lastLog = `${target.name}이 ${evolved.name}(으)로 진화했습니다.`;
+      nextState.lastLog = `${withParticle(target.name, '이')} ${withParticle(evolved.name, '으로')} 진화했습니다.`;
       return nextState;
     }
 
     return {
       ...nextState,
-      lastLog: `${target.name}은 진화할 수 없습니다.`,
+      lastLog: `${withParticle(target.name, '은')} 진화할 수 없습니다.`,
     };
   }
 
-  nextState.lastLog = `${item.name}은 패시몬 선택이 필요하지 않습니다.`;
+  nextState.lastLog = `${withParticle(item.name, '은')} 패시몬 선택이 필요하지 않습니다.`;
   return nextState;
 }
 

@@ -12,6 +12,7 @@ import type {
   StatusConditionId,
   TagValue,
 } from '../types/game';
+import { withParticle } from '../game/text';
 
 interface NoteMoveResult {
   chance: number;
@@ -778,9 +779,9 @@ function parseMoveResult(block: string[], power?: number): NoteMoveResult {
 }
 
 function fallbackMoveDescription(moveName: string, kind?: MoveData['kind']): string {
-  if (kind === 'prep') return `{name}이 ${moveName}로 감염을 준비한다.`;
-  if (kind === 'signature') return `{name}이 ${moveName}을 사용한다.`;
-  return `{name}이 ${moveName}을 사용한다.`;
+  if (kind === 'prep') return `{name}이 ${withParticle(moveName, '으로')} 감염을 준비한다.`;
+  if (kind === 'signature') return `{name}이 ${withParticle(moveName, '을')} 사용한다.`;
+  return `{name}이 ${withParticle(moveName, '을')} 사용한다.`;
 }
 
 function typeLabelForMove(rawType: string, kind?: MoveData['kind']): string | undefined {

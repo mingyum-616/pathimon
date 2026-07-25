@@ -327,10 +327,11 @@ function chooseWeightedBucket(
   return buckets[buckets.length - 1]!;
 }
 
-export function createDistributedWildRoster(
+function distributeByType(
   monsters: MonsterData[],
-  random: RandomSource = Math.random,
-  maxSameTypeRun = 2,
+  random: RandomSource,
+  maxSameTypeRun: number,
+  precedingTail: MonsterData[] = [],
 ): MonsterData[] {
   const buckets = new Map<string, MonsterData[]>();
 
@@ -343,23 +344,90 @@ export function createDistributedWildRoster(
     buckets.set(type, shuffled(bucket, random));
   }
 
-  const output: MonsterData[] = [];
+  // 밴드 경계에서도 같은 계열이 연속하지 않도록 앞 밴드 꼬리를 연속 판정에만 쓰고 결과에는 넣지 않는다.
+  const emitted: MonsterData[] = [];
+  const runWindow: MonsterData[] = [...precedingTail.slice(-maxSameTypeRun)];
   let remaining = monsters.length;
 
   while (remaining > 0) {
     const availableBuckets = [...buckets.entries()].filter(([, bucket]) => bucket.length > 0);
-    const allowedBuckets = availableBuckets.filter(([type]) => !hasBlockedType(output, type, maxSameTypeRun));
+    const allowedBuckets = availableBuckets.filter(([type]) => !hasBlockedType(runWindow, type, maxSameTypeRun));
     const candidates = allowedBuckets.length > 0 ? allowedBuckets : availableBuckets;
     const [, bucket] = chooseWeightedBucket(candidates, random);
     const monster = bucket.shift();
 
     if (monster) {
-      output.push(monster);
+      emitted.push(monster);
+      runWindow.push(monster);
       remaining -= 1;
     }
   }
 
-  return output;
+  return emitted;
+}
+
+export function monsterBaseStatTotal(monster: MonsterData): number {
+  return monster.maxHp + monster.attack + monster.defense;
+}
+
+// 야생 조우는 두 개의 밴드 풀로 갈린다. 완전 정렬이 아니라 **풀만 다르고 순서는 밴드 안에서 무작위**다.
+//   1~60층   : 종합 능력치 ~195 이하 풀
+//   61~100층 : 종합 능력치 140 이상 풀
+// 겹치는 140~195 구간은 양쪽에 나올 수 있어서, 죽고 다시 잡는 흐름이 후반으로 갈수록 자연스럽게 강해진다.
+export const LATE_BAND_START_FLOOR = 61;
+export const EARLY_BAND_MAX_BST = 195;
+export const LATE_BAND_MIN_BST = 140;
+
+function wildFloorCountUpTo(floor: number): number {
+  // 5의 배수 층은 트레이너·보스라 야생이 아니다(state/runState.ts encounterKindForFloor).
+  return Math.max(0, floor - Math.floor(floor / 5));
+}
+
+export function lateBandWildSlotCount(
+  totalFloors = TOTAL_FLOORS,
+  lateBandStartFloor = LATE_BAND_START_FLOOR,
+): number {
+  return Math.max(0, wildFloorCountUpTo(totalFloors) - wildFloorCountUpTo(lateBandStartFloor - 1));
+}
+
+function splitIntoBands(
+  monsters: MonsterData[],
+  lateSlots: number,
+  random: RandomSource,
+): { early: MonsterData[]; late: MonsterData[] } {
+  const lateOnly = shuffled(monsters.filter((m) => monsterBaseStatTotal(m) > EARLY_BAND_MAX_BST), random);
+  const shared = shuffled(
+    monsters.filter((m) => {
+      const bst = monsterBaseStatTotal(m);
+      return bst >= LATE_BAND_MIN_BST && bst <= EARLY_BAND_MAX_BST;
+    }),
+    random,
+  );
+  const earlyOnly = shuffled(monsters.filter((m) => monsterBaseStatTotal(m) < LATE_BAND_MIN_BST), random);
+
+  // 상위 밴드 전용(>195)을 먼저 넣고, 자리가 남으면 공용 구간(140~195)에서 채운다.
+  const late = lateOnly.splice(0, lateSlots);
+  late.push(...shared.splice(0, Math.max(0, lateSlots - late.length)));
+
+  // 상위 밴드 전용이 슬롯보다 많으면 남는 개체는 하위 밴드로 흘려보낸다(밴드 규칙보다 전 종 등장이 우선).
+  const early = [...earlyOnly, ...shared, ...lateOnly];
+  late.push(...early.splice(0, Math.max(0, lateSlots - late.length)));
+
+  return { early, late };
+}
+
+export function createDistributedWildRoster(
+  monsters: MonsterData[],
+  random: RandomSource = Math.random,
+  maxSameTypeRun = 2,
+  lateSlotCount = lateBandWildSlotCount(),
+): MonsterData[] {
+  const lateSlots = Math.min(monsters.length, Math.max(0, lateSlotCount));
+  const { early, late } = splitIntoBands(monsters, lateSlots, random);
+  const earlyRoster = distributeByType(early, random, maxSameTypeRun);
+  const lateRoster = distributeByType(late, random, maxSameTypeRun, earlyRoster);
+
+  return [...earlyRoster, ...lateRoster];
 }
 
 export function wildEncounterRoster(): MonsterData[] {

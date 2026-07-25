@@ -104,7 +104,28 @@ export type AbilityId =
   | 'environmental_resistance'
   | 'iron_piracy'
   // 성충이 조직을 옮겨 다니며 정착을 회피한다. `larval_migration`(유충)과 생활사 단계가 다르다.
-  | 'tissue_migration';
+  | 'tissue_migration'
+  // 보스(사람) 전용 방어특성. 10층마다 1개씩 늘어나 후반 보스의 난도를 만든다(state/factory.ts selectBossAbilities).
+  // 계열 축 — 공격해 오는 패시몬의 category를 본다.
+  | 'virology_master'
+  | 'bacteriology_master'
+  | 'mycology_master'
+  | 'protozoology_master'
+  // 감염 경로 축 — 공격해 오는 패시몬의 pathway 태그를 본다.
+  | 'hand_hygiene'
+  | 'food_safety'
+  | 'safer_sex'
+  | 'blood_screening'
+  | 'wound_asepsis'
+  | 'vector_control'
+  // 구조 축 — wall 태그를 본다.
+  | 'alcohol_disinfection'
+  | 'bcg_memory'
+  | 'endotoxin_neutralization'
+  // 위치·크기 축.
+  | 'ctl_surveillance'
+  | 'humoral_patrol'
+  | 'eosinophil_recruitment';
 export type MoveId = string;
 
 export interface CountermeasureProfile {
@@ -188,6 +209,8 @@ export interface AbilityData {
   name: string;
   description?: string;
   resistTag?: Partial<Record<TagAxis, Partial<Record<TagValue, number>>>>;
+  // 공격해 오는 패시몬의 `category`(계열)로 반감한다. 태그가 아니라 계열 축이라 resistTag와 별도로 둔다.
+  resistCategory?: Record<string, number>;
 }
 
 export interface MoveData {
@@ -339,6 +362,10 @@ export interface RuntimeMonster {
   // 야생 포획 시 내는 OX 퀴즈(노트 `포획 OX:`). 종당 4~5문항.
   captureQuiz?: CaptureQuizItem[];
   countermeasures?: CountermeasureProfile;
+  // 진화 조건. 이 패시몬을 내보낸 채로 끝낸 전투 수. 지나가기는 세지 않는다.
+  battlesCompleted?: number;
+  // 이번 전투에 한 번이라도 나왔는지. 승리 시 battlesCompleted로 정산하고 지운다.
+  enteredCurrentBattle?: boolean;
   effects: ActiveEffect[];
   statusConditions?: StatusConditionStacks;
   stunned: boolean;

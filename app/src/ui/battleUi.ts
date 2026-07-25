@@ -8,11 +8,12 @@ import {
   STATUS_CONDITION_IDS,
   statusConditionEffectText,
   statusConditionLabels,
+  statusConditionStackLabel,
   statusConditionStacks,
 } from '../data/statusConditions';
 import { currentMoveData, currentMoveName } from '../battle/moveStages';
 import { bossMoveEffectiveness, createBossDefenseProfile } from '../battle/bossMatchup';
-import { interpolatePathimonName } from '../game/text';
+import { interpolatePathimonName, withParticle } from '../game/text';
 import { randomLearningPoint, sanitizeLearningText } from '../game/learning';
 import type { AbilityId, CapsuleId, EffectPrimitive, EncounterKind, MonsterData, MoveData, MoveId, MoveSlot, RunMode, RuntimeMonster, TagValue, VisualStyle } from '../types/game';
 
@@ -458,10 +459,50 @@ export function mobileControlOverlayInteractive(input: { coarsePointer: boolean;
   return input.hasTouch && input.coarsePointer;
 }
 
-export function partyMenuOptions(purpose: PartyMenuPurpose): string[] {
+// 도전모드에서 상성표는 사실상 정답표다. 그냥 열리면 예고를 읽고 교체하는 판단이 사라진다.
+// 막지는 않되 한 번 찔러서, 표를 여는 것이 '선택'이라는 감각을 남긴다.
+export const MATCHUP_GATE_TAUNTS: string[] = [
+  '상성표 없이는 자신 없나?',
+  '커닝페이퍼, 지금 펴시겠습니까?',
+  '기억이 안 나는 건가, 원래 몰랐던 건가?',
+  '국가고시장에는 이 표 못 들고 간다.',
+  '족보 없이 한 판, 어떤가?',
+  '교수님이 뒤에서 보고 계신다.',
+  '이 정도는 외우고 왔어야 하지 않나?',
+  '펼치는 순간 실력은 0점 처리다. 물론 농담이고.',
+];
+
+export interface MatchupGateCopy {
+  cancelLabel: string;
+  confirmLabel: string;
+  subtitle: string;
+  taunt: string;
+  title: string;
+}
+
+export function matchupGateCopy(roll = Math.random()): MatchupGateCopy {
+  const index = Math.min(MATCHUP_GATE_TAUNTS.length - 1, Math.max(0, Math.floor(roll * MATCHUP_GATE_TAUNTS.length)));
+  return {
+    title: '상성표를 펼치기 전에',
+    taunt: MATCHUP_GATE_TAUNTS[index],
+    subtitle: '이번 전투 동안은 다시 묻지 않는다.',
+    confirmLabel: '그래도 본다',
+    cancelLabel: '내 힘으로 한다',
+  };
+}
+
+// 학습모드는 가르치는 모드라 그냥 연다. 도전모드에서만, 전투당 한 번만 묻는다.
+export function shouldGateMatchupTable(input: { mode: RunMode; alreadyAcknowledged: boolean }): boolean {
+  return input.mode === 'challenge' && !input.alreadyAcknowledged;
+}
+
+// 진화는 무료·즉시라 정비구역이 없는 학습모드에서도 성장 수단이 남는다.
+// 놓아줄 대상을 고르는 화면에서는 진화를 띄우지 않는다.
+export function partyMenuOptions(purpose: PartyMenuPurpose, canEvolve = false): string[] {
   if (purpose === 'release') return ['놓아준다', '능력치를 본다', '그만둔다'];
-  if (purpose === 'forced') return ['교체한다', '능력치를 본다'];
-  return ['교체한다', '능력치를 본다', '그만둔다'];
+  const evolveOption = canEvolve ? ['진화한다'] : [];
+  if (purpose === 'forced') return ['교체한다', ...evolveOption, '능력치를 본다'];
+  return ['교체한다', ...evolveOption, '능력치를 본다', '그만둔다'];
 }
 
 export interface BattlePanelLayout {
@@ -773,7 +814,7 @@ export function commandViewLines(
   helperText: string,
   onboardingText = '',
 ): string[] {
-  const lines = [`${player.name}은 무엇을 할까?`];
+  const lines = [`${withParticle(player.name, '은')} 무엇을 할까?`];
   if (encounterKind === 'wild') {
     lines.push(notice || helperText);
     if (onboardingText && onboardingText !== notice) lines.push(onboardingText);
@@ -995,8 +1036,7 @@ export function statusConditionDetailLines(monster: RuntimeMonster): string[] {
       const stacks = statusConditionStacks(monster, id);
       if (stacks <= 0) return undefined;
 
-      const condition = STATUS_CONDITIONS[id];
-      const label = stacks > 1 ? `${condition.label}(${stacks})` : condition.label;
+      const label = statusConditionStackLabel(id, stacks);
       return `${label}: ${statusConditionEffectText(id, stacks)}`;
     })
     .filter((line): line is string => Boolean(line));

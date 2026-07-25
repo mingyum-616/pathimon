@@ -5,7 +5,7 @@ describe('BattleScene capture quiz and first trainer guidance', () => {
   it('throws the selected capsule before showing an OX quiz', () => {
     expect(battleSceneSource).toContain('playCapsuleThrow');
     expect(battleSceneSource).toContain('drawCaptureQuizView');
-    expect(battleSceneSource).toContain('이 질문을 던진다...');
+    expect(battleSceneSource).toContain("withParticle(enemy.name, '이')");
     expect(battleSceneSource).toContain("handleCaptureQuizAnswer(true)");
     expect(battleSceneSource).toContain("handleCaptureQuizAnswer(false)");
     expect(battleSceneSource).toContain('핵심 문장');

@@ -15,10 +15,14 @@ import {
 } from '../state/runState';
 import type { RunState, ShopItem } from '../types/game';
 import { APP_WIDTH, APP_HEIGHT, COLORS } from '../game/constants';
+import { withParticle } from '../game/text';
 import { destroySceneChildren } from '../ui/sceneCleanup';
 import { pathimonSpriteAssets } from '../ui/battleUi';
 import { addBoxLabel, addLabel, drawPanel } from '../ui/draw';
+import { TEXT } from '../ui/typography';
 import { keyboardCommand } from '../ui/keyboard';
+
+const BUTTON_HOVER_FILL = 0x4a405d;
 
 interface ShopSceneData {
   state?: RunState;
@@ -82,40 +86,41 @@ export class ShopScene extends Phaser.Scene {
     this.add.rectangle(0, 0, APP_WIDTH, APP_HEIGHT, COLORS.ink).setOrigin(0);
 
     drawPanel(this, 48, 46, 928, 476);
-    addLabel(this, 82, 76, '정비 구역', 32);
+    addLabel(this, 82, 70, '정비 구역', TEXT.display);
     this.drawFloorBadge();
-    addLabel(this, 82, 118, `보유 자금: ${this.state.money}`, 21);
-    addBoxLabel(this, 82, 146, `캡슐: ${formatCapsuleInventory(this.state.capsuleInventory)}`, {
+    addLabel(this, 82, 112, `보유 자금: ${this.state.money}`, TEXT.heading);
+    addBoxLabel(this, 82, 140, `캡슐: ${formatCapsuleInventory(this.state.capsuleInventory)}`, {
       width: 710,
       height: 18,
-      size: 14,
-      minSize: 10,
+      size: TEXT.label,
       maxLines: 1,
-    }).setAlpha(0.9);
-    addBoxLabel(this, 82, 168, this.note || '사람 전투 이후 한 번만 구매할 수 있습니다.', {
+      color: COLORS.muted,
+    });
+    // 안내문이 두 줄로 접히면 아래 상품 카드와 겹쳤다. 카드 시작점을 그 아래로 내린다.
+    addBoxLabel(this, 82, 162, this.note || '사람 전투 이후 한 번만 구매할 수 있습니다.', {
       width: 720,
-      height: 42,
-      size: 16,
-      minSize: 11,
+      height: 40,
+      size: TEXT.body,
       maxLines: 2,
-    }).setAlpha(0.9);
+    });
 
     this.state.shopInventory?.forEach((item, index) => this.drawShopItem(item, index));
 
-    this.createButton(802, 456, 138, 44, '다음 층', () => {
+    // 두 버튼을 한 줄에 둔다. 예전 배치는 새로고침이 패널 아래로 18px 튀어나왔다.
+    this.createButton(652, 450, 150, 44, `새로고침 ₩${maintenanceRefreshCost(this.state)}`, () => {
+      this.state = refreshMaintenanceInventory(this.state);
+      this.note = this.state.lastLog;
+      this.selectedTargetItem = undefined;
+      this.render();
+    });
+
+    this.createButton(812, 450, 150, 44, '다음 층', () => {
       const nextState = advanceFromShop(this.state);
       if (nextState.phase === 'bossIntro') {
         this.scene.start('BossIntroScene', { state: nextState });
         return;
       }
       this.scene.start('BattleScene', { state: nextState });
-    });
-
-    this.createButton(802, 506, 138, 34, `새로고침 ₩${maintenanceRefreshCost(this.state)}`, () => {
-      this.state = refreshMaintenanceInventory(this.state);
-      this.note = this.state.lastLog;
-      this.selectedTargetItem = undefined;
-      this.render();
     });
 
     if (this.selectedTargetItem) {
@@ -128,12 +133,11 @@ export class ShopScene extends Phaser.Scene {
     const y = 72;
     this.add.rectangle(x, y, 118, 34, 0x20202c, 0.9)
       .setOrigin(0)
-      .setStrokeStyle(2, 0x72d6ff, 0.86);
+      .setStrokeStyle(2, COLORS.focus, 0.86);
     addBoxLabel(this, x + 59, y + 17, `${this.state.floor}층`, {
       width: 98,
       height: 22,
-      size: 17,
-      minSize: 12,
+      size: TEXT.body,
       maxLines: 1,
       align: 'center',
       origin: [0.5, 0.5],
@@ -144,18 +148,19 @@ export class ShopScene extends Phaser.Scene {
     const column = index % 3;
     const row = Math.floor(index / 3);
     const x = 82 + column * 300;
-    const y = 198 + row * 126;
+    const y = 210 + row * 118;
     const width = 270;
     const height = 104;
 
     drawPanel(this, x, y, width, height).setAlpha(item.purchased ? 0.55 : 0.98);
     this.add.image(x + 44, y + 48, item.imagePath).setOrigin(0.5).setDisplaySize(42, 42).setAlpha(item.purchased ? 0.38 : 1);
-    addBoxLabel(this, x + 82, y + 12, item.name, { width: 168, height: 22, size: 17, minSize: 12, maxLines: 1 })
-      .setAlpha(item.purchased ? 0.48 : 1);
-    addBoxLabel(this, x + 82, y + 38, item.description, { width: 168, height: 28, size: 11, minSize: 9, maxLines: 2 })
-      .setAlpha(item.purchased ? 0.4 : 0.82);
+    addBoxLabel(this, x + 82, y + 10, item.name, { width: 168, height: 24, size: TEXT.body, maxLines: 1 })
+      .setAlpha(item.purchased ? 0.55 : 1);
+    addBoxLabel(this, x + 82, y + 36, item.description, { width: 168, height: 32, size: TEXT.caption, maxLines: 2, color: COLORS.muted })
+      .setAlpha(item.purchased ? 0.5 : 1);
     if (item.kind === 'capsule' && item.capsuleId) {
-      addLabel(this, x + 24, y + 74, `보유 ${this.state.capsuleInventory[item.capsuleId] ?? 0}`, 11).setAlpha(item.purchased ? 0.4 : 0.78);
+      addLabel(this, x + 20, y + 74, `보유 ${this.state.capsuleInventory[item.capsuleId] ?? 0}`, TEXT.caption)
+        .setAlpha(item.purchased ? 0.5 : 0.9);
     }
 
     const label = item.purchased ? '구매 완료' : item.price > 0 ? `구매 ₩${item.price}` : '확인';
@@ -182,7 +187,7 @@ export class ShopScene extends Phaser.Scene {
     }
 
     this.selectedTargetItem = item;
-    this.note = `${item.name}을 사용할 패시몬을 선택하세요.`;
+    this.note = `${withParticle(item.name, '을')} 사용할 패시몬을 선택하세요.`;
     this.render();
   }
 
@@ -190,9 +195,9 @@ export class ShopScene extends Phaser.Scene {
     this.keyboardButtons = [];
     this.keyboardCursor = 0;
     this.add.rectangle(0, 0, APP_WIDTH, APP_HEIGHT, 0x000000, 0.58).setOrigin(0).setInteractive();
-    drawPanel(this, 210, 94, 604, 430);
-    addLabel(this, 246, 126, item.name, 25);
-    addLabel(this, 246, 160, '패시몬 선택', 18).setAlpha(0.84);
+    drawPanel(this, 210, 94, 604, 430).setStrokeStyle(3, COLORS.focus);
+    addLabel(this, 246, 122, item.name, TEXT.title);
+    addLabel(this, 246, 158, '패시몬 선택', TEXT.body).setColor(COLORS.muted);
 
     this.state.party.forEach((monster, index) => {
       const y = 200 + index * 46;
@@ -202,9 +207,9 @@ export class ShopScene extends Phaser.Scene {
 
       drawPanel(this, 246, y, 520, 36).setAlpha(enabled ? 0.95 : 0.45);
       this.drawPartyThumbnail(monster, 266, y + 18, enabled ? 1 : 0.4);
-      addBoxLabel(this, 288, y + 8, monster.name, { width: 158, height: 18, size: 14, minSize: 10, maxLines: 1 })
-        .setAlpha(enabled ? 1 : 0.48);
-      addLabel(this, 452, y + 9, hpText, 13).setAlpha(enabled ? 0.9 : 0.45);
+      addBoxLabel(this, 288, y + 8, monster.name, { width: 158, height: 20, size: TEXT.label, maxLines: 1 })
+        .setAlpha(enabled ? 1 : 0.55);
+      addLabel(this, 452, y + 8, hpText, TEXT.label).setAlpha(enabled ? 0.95 : 0.55);
       this.createButton(616, y + 5, 128, 26, action, () => {
         this.state = purchaseShopItemForPartyMember(this.state, item.id, index);
         this.note = this.state.lastLog;
@@ -264,11 +269,12 @@ export class ShopScene extends Phaser.Scene {
     this.keyboardButtons.push({ disabled, onClick });
     const focused = keyboardIndex === this.keyboardCursor;
     const rect = this.add.rectangle(x, y, width, height, disabled ? COLORS.ink : COLORS.panelDark).setOrigin(0);
-    rect.setStrokeStyle(focused ? 4 : 2, focused ? 0x72d6ff : disabled ? COLORS.panel : COLORS.line);
+    rect.setStrokeStyle(focused ? 3 : 2, focused ? COLORS.focus : disabled ? COLORS.panel : COLORS.border);
 
     if (!disabled) {
       rect.setInteractive({ useHandCursor: true });
-      rect.on('pointerover', () => rect.setFillStyle(COLORS.line));
+      // 호버 채움에 경고색(line)을 쓰면 구매 버튼이 삭제 버튼처럼 읽힌다.
+      rect.on('pointerover', () => rect.setFillStyle(BUTTON_HOVER_FILL));
       rect.on('pointerout', () => rect.setFillStyle(COLORS.panelDark));
       rect.on('pointerdown', onClick);
     } else {
@@ -278,13 +284,12 @@ export class ShopScene extends Phaser.Scene {
     addBoxLabel(this, x + width / 2, y + height / 2, label, {
       width: width - 14,
       height: height - 6,
-      size: 14,
-      minSize: 9,
+      size: TEXT.label,
       maxLines: 2,
       align: 'center',
       origin: [0.5, 0.5],
     })
-      .setAlpha(disabled ? 0.55 : 1);
+      .setAlpha(disabled ? 0.65 : 1);
   }
 
   private handleKeyboardDown = (event: KeyboardEvent): void => {

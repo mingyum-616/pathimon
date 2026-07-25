@@ -1,4 +1,5 @@
 import type { AttackType, MonsterData, MoveData, MoveId } from '../types/game';
+import { withParticle } from '../game/text';
 import { NOTE_MONSTERS } from './pathimonNoteData';
 
 // 뭉쳐 있던 약물 계열 기술(항바이러스제 투약 등)을 개별 약물 기술(아시클로버 투여 등)로 분리한다.
@@ -50,7 +51,7 @@ export const DRUG_MOVES: Record<MoveId, MoveData> = Object.fromEntries(
       power: template.power,
       accuracy: template.accuracy,
       description: `${drug}로 병원체를 직접 겨눈다.`,
-      learnText: `${drug}은(는) ${template.typeLabel} 계열 처치다.`,
+      learnText: `${withParticle(drug, '은')} ${template.typeLabel} 계열 처치다.`,
       targetTags: [drug],
     };
     return [id, move] as const;

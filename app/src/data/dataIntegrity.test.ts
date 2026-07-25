@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { ABILITIES } from './abilities';
-import { BOSSES, LATE_GAME_BOSS_IDS, createBossRosterIds } from './bosses';
+import { BOSSES, BOSS_COMBAT_STATS, LATE_GAME_BOSS_IDS, createBossRosterIds } from './bosses';
 import { BOSS_ATTACK_MOVE_IDS } from './bossAttackMatchups';
 import { EFFECTIVENESS } from './effectiveness';
 import { MONSTERS, STARTER_ID, TOTAL_FLOORS } from './monsters';
-import { TRAINERS } from './trainers';
+import { TRAINERS, TRAINER_COMBAT_STATS } from './trainers';
 import { BOSS_CHARACTER_ASSETS, TRAINER_CHARACTER_ASSETS } from './characterAssets';
 import { buildLoadout, buildMoveSlots } from '../battle/loadout';
 import { MOVES } from './moves';
 import { NOTE_MONSTERS } from './pathimonNoteData';
 import { createBossInstance, createMonsterInstance, createTrainerInstance } from '../state/factory';
 import { bossMoveEffectiveness, createBossDefenseProfile } from '../battle/bossMatchup';
+import { DEFENSE_COMPRESSION_MIN_SCALE } from '../battle/damage';
 
 const pathimonAssets = import.meta.glob('/public/images/pathimon/*.png', {
   eager: true,
@@ -78,6 +79,46 @@ describe('Pathimon data', () => {
 
     const profPIndex = BOSSES.findIndex((boss) => boss.id === 'prof_p');
     expect(createBossInstance(profPIndex, 70).abilities).toContain('parasite_master');
+  });
+
+  // 난도 곡선이 여기 하나에 걸려 있다. 풀이 얕으면 층이 깊어져도 방어특성이 안 늘어난다.
+  it('ramps boss defense traits by one per ten floors across distinct axes', () => {
+    const bossIndex = BOSSES.findIndex((boss) => boss.id === 'immune_hq');
+
+    expect(createBossInstance(bossIndex, 10).abilities).toHaveLength(1);
+    expect(createBossInstance(bossIndex, 50).abilities).toHaveLength(5);
+    expect(createBossInstance(bossIndex, 100).abilities).toHaveLength(10);
+
+    for (const boss of BOSSES) {
+      expect(boss.abilityPool.length).toBeGreaterThanOrEqual(10);
+      expect(new Set(boss.abilityPool).size).toBe(boss.abilityPool.length);
+    }
+
+    // 계열·경로·외피·위치·크기 축이 모두 풀에 들어 있어야 파티 편식이 실제로 벌을 받는다.
+    const pool = new Set(BOSSES[0].abilityPool);
+    for (const required of [
+      'parasite_master',
+      'virology_master',
+      'bacteriology_master',
+      'mask',
+      'endotoxin_neutralization',
+      'ctl_surveillance',
+      'eosinophil_recruitment',
+    ]) {
+      expect(pool.has(required as never)).toBe(true);
+    }
+  });
+
+  it('gives every boss defense trait a live halving rule and a player-facing description', () => {
+    for (const abilityId of new Set(BOSSES.flatMap((boss) => boss.abilityPool))) {
+      const ability = ABILITIES[abilityId];
+      const hasTagRule = Boolean(ability.resistTag);
+      const hasCategoryRule = Boolean(ability.resistCategory);
+      const hasTableRule = Object.values(EFFECTIVENESS).some((row) => row?.[abilityId] !== undefined);
+
+      expect(hasTagRule || hasCategoryRule || hasTableRule, `${abilityId} has no halving rule`).toBe(true);
+      expect(ability.description?.length ?? 0, `${abilityId} description`).toBeGreaterThan(8);
+    }
   });
 
   it('has a valid starter with a scientific name', () => {
@@ -157,6 +198,14 @@ describe('Pathimon data', () => {
       expect(monster.maxHp).toBeGreaterThan(0);
       expect(monster.attack).toBeGreaterThan(0);
       expect(monster.defense).toBeGreaterThan(0);
+    }
+  });
+
+  // battle/damage.ts는 노트 스케일(25 이상)만 압축하고 레거시 대표종의 한 자릿수 방어는 통과시킨다.
+  // 노트 방어가 그 경계 아래로 내려오면 압축이 조용히 꺼지므로 여기서 막는다.
+  it('keeps every note pathimon defense at or above the compression scale floor', () => {
+    for (const monster of NOTE_MONSTERS) {
+      expect(monster.defense).toBeGreaterThanOrEqual(DEFENSE_COMPRESSION_MIN_SCALE);
     }
   });
 
@@ -416,7 +465,8 @@ describe('Pathimon data', () => {
 
     expect(boss.maxHp).toBe(BOSSES[0].maxHp * 104);
     expect(boss.hp).toBe(BOSSES[0].maxHp * 104);
-    expect(boss.attack).toBe(40);
+    // 공격력은 밸런싱 상수라 값을 박아두지 않는다. 런타임 인스턴스가 상수를 그대로 쓰는지만 본다.
+    expect(boss.attack).toBe(BOSS_COMBAT_STATS.attack);
   });
 
   it('starts boss encounters without pre-existing symptoms', () => {
@@ -432,7 +482,7 @@ describe('Pathimon data', () => {
     // 1/5은 트레이너 전투가 2턴으로 너무 짧아 1/4로 올렸다. 스탯은 보스와 동일하고 HP만 다르다.
     expect(trainer.maxHp).toBe(Math.round(boss.maxHp / 4));
     expect(trainer.hp).toBe(Math.round(boss.maxHp / 4));
-    expect(trainer.attack).toBe(40);
+    expect(trainer.attack).toBe(TRAINER_COMBAT_STATS.attack);
     expect(trainer.attack).toBe(boss.attack);
     expect(trainer.defense).toBe(boss.defense);
   });
@@ -464,20 +514,30 @@ describe('Pathimon data', () => {
     expect(Object.keys(ABILITIES).sort()).toEqual([
       'acid_tolerance',
       'acidfast',
+      'alcohol_disinfection',
       'antigen_disguise',
       'antigen_var',
       'antitoxin',
       'autoinfection',
+      'bacteriology_master',
       'barrier',
+      'bcg_memory',
       'biofilm',
+      'blood_screening',
       'capsule',
       'catalase',
       'comp_evade',
       'comp_patrol',
+      'ctl_surveillance',
       'cyst',
+      'endotoxin_neutralization',
       'environmental_resistance',
+      'eosinophil_recruitment',
       'epithelial_barrier',
+      'food_safety',
       'gastric_acid',
+      'hand_hygiene',
+      'humoral_patrol',
       'immune_cell_kill',
       'immune_regulation',
       'iron_limitation',
@@ -489,15 +549,21 @@ describe('Pathimon data', () => {
       'mask',
       'microbiota_defense',
       'mucociliary',
+      'mycology_master',
       'no_nucleic',
       'none',
       'oxidative_neutral',
       'parasite_master',
       'phagolysosome_block',
       'proteinA',
+      'protozoology_master',
       'receptor_defect',
+      'safer_sex',
       'spore',
       'tissue_migration',
+      'vector_control',
+      'virology_master',
+      'wound_asepsis',
     ]);
 
     const requiredMoveIds = [

@@ -14,7 +14,7 @@ import {
 import { TAG_LABELS } from '../data/labels';
 import { MOVES } from '../data/moves';
 import { MONSTERS } from '../data/monsters';
-import { interpolatePathimonName } from '../game/text';
+import { interpolatePathimonName, withParticle } from '../game/text';
 import {
   conciseLearningFeedback,
   contextualLearningPoint,
@@ -106,13 +106,13 @@ function defaultLearningDetail(state: RunState): string {
     return '전투에서는 병원체의 외피, 위치, 방어기전을 함께 읽어야 합니다.';
   }
 
-  return `${enemy.name}(${enemy.scientificName})은 ${enemy.category}이며 ${describeTags(enemy)} 특징을 가집니다. 방어특성은 ${describeAbilities(enemy)}입니다.`;
+  return `${withParticle(`${enemy.name}(${enemy.scientificName})`, '은')} ${enemy.category}이며 ${describeTags(enemy)} 특징을 가집니다. 방어특성은 ${describeAbilities(enemy)}입니다.`;
 }
 
 function playerMoveLearningDetail(state: RunState, move: MoveData, result: DamageResult): string {
   const noteText = result.multiplier.notes.length > 0 ? ` ${result.multiplier.notes.join(', ')}.` : '';
   const learningPoint = contextualLearningPoint(state.party[state.activeIndex], move.id) || move.learnText;
-  return `${defaultLearningDetail(state)} ${move.name}은 ${learningPoint} 현재 상성 배율은 ${result.multiplier.total}배입니다.${noteText}`;
+  return `${defaultLearningDetail(state)} ${withParticle(move.name, '은')} ${learningPoint} 현재 상성 배율은 ${result.multiplier.total}배입니다.${noteText}`;
 }
 
 function withLearningFeedback(state: RunState, message: string, detail = defaultLearningDetail(state)): string {
@@ -151,7 +151,26 @@ function clearBattleOnlyState(monster: RuntimeMonster): RuntimeMonster {
     stunned: false,
     fainted: monster.hp <= 0,
     usedSignatureMoveIds: [],
+    enteredCurrentBattle: false,
   };
+}
+
+// 전투를 끝냈을 때만 참전 기록을 진화 조건으로 정산한다. 지나가기는 세지 않는다.
+function creditBattleParticipation(party: RuntimeMonster[]): RuntimeMonster[] {
+  return party.map((monster) => (monster.enteredCurrentBattle
+    ? { ...monster, battlesCompleted: (monster.battlesCompleted ?? 0) + 1 }
+    : monster));
+}
+
+// 본가와 같이 교체로 물러나면 랭크 변화는 사라진다. 다시 내보내도 되살아나지 않는다.
+function clearStatStages(monster: RuntimeMonster | undefined): void {
+  if (!monster) return;
+  monster.effects = monster.effects.filter((effect) => effect.kind !== 'buff');
+}
+
+function markEnteredBattle(monster: RuntimeMonster | undefined): void {
+  if (!monster) return;
+  monster.enteredCurrentBattle = true;
 }
 
 function partyProgressText(state: RunState): string {
@@ -177,7 +196,7 @@ function maintenanceVictoryLog(state: RunState, reward: number): string {
 }
 
 function pathimonMemoDetail(monster: RuntimeMonster): string {
-  const memo = randomLearningPoint(monster) || `${monster.scientificName}은 ${monster.category} 타입입니다.`;
+  const memo = randomLearningPoint(monster) || `${withParticle(monster.scientificName, '은')} ${monster.category} 타입입니다.`;
   return memo.trim();
 }
 
@@ -196,7 +215,7 @@ function setWinState(state: RunState, message: string, _learningDetail?: string,
   return {
     ...state,
     money: state.money + reward,
-    party: state.party.map(clearBattleOnlyState),
+    party: creditBattleParticipation(state.party).map(clearBattleOnlyState),
     phase: shouldOpenShop ? 'shop' : 'floorClear',
     lastLog: shouldOpenShop ? maintenanceVictoryLog(state, reward) : battleResultLog,
     battleResultLog,
@@ -217,12 +236,12 @@ function hasAvailableReplacement(state: RunState): boolean {
 function setCollapsedState(state: RunState, actor: RuntimeMonster): RunState {
   if (hasAvailableReplacement(state)) {
     state.phase = 'forcedSwitch';
-    state.lastLog = `${actor.name} 쓰러졌습니다. 다음 패시몬을 내보내세요.`;
+    state.lastLog = `${withParticle(actor.name, '이')} 쓰러졌습니다. 다음 패시몬을 내보내세요.`;
     return state;
   }
 
   state.phase = 'defeat';
-  state.lastLog = `${actor.name}이 쓰러졌습니다. 더 이상 전투 가능한 패시몬이 없습니다.`;
+  state.lastLog = `${withParticle(actor.name, '이')} 쓰러졌습니다. 더 이상 전투 가능한 패시몬이 없습니다.`;
   return state;
 }
 
@@ -230,14 +249,14 @@ function defeatedOpponentMessage(enemy: RuntimeMonster, byOngoingEffects = false
   const cause = byOngoingEffects ? '지속 효과를 버티지 못하고 ' : '';
 
   if (enemy.isBoss) {
-    return `${enemy.name}이 ${cause}"대응 체계를 다시 짜야겠군." 하고 물러났다.`;
+    return `${withParticle(enemy.name, '이')} ${cause}"대응 체계를 다시 짜야겠군." 하고 물러났다.`;
   }
 
   if (enemy.isTrainer) {
-    return `${enemy.name}이 ${cause}"여기까지입니다. 다음 대응안을 준비하겠습니다." 하고 물러났다.`;
+    return `${withParticle(enemy.name, '이')} ${cause}"여기까지입니다. 다음 대응안을 준비하겠습니다." 하고 물러났다.`;
   }
 
-  return `${enemy.name}이 ${cause}쓰러졌다.`;
+  return `${withParticle(enemy.name, '이')} ${cause}쓰러졌다.`;
 }
 
 function markDamage(monster: RuntimeMonster, damage: number): void {
@@ -263,7 +282,7 @@ function statusDamageLog(actor: RuntimeMonster, actorDamage: number, enemy: Runt
     return '';
   }
 
-  return damagedNames.map((name) => `${name}은 상태이상에 의해 피해를 받고 있다.`).join('\n');
+  return damagedNames.map((name) => `${withParticle(name, '은')} 상태이상에 의해 피해를 받고 있다.`).join('\n');
 }
 
 function appendSymptom(monster: RuntimeMonster, symptom: string | undefined, sourceName: string): void {
@@ -459,7 +478,7 @@ export function applyFinalBossSkill(state: RunState, random: () => number = Math
     ...original,
     templateId: `sealed_${original.templateId}`,
     name: '봉인 인형',
-    scientificName: `${original.name}이 봉인된 대타 인형`,
+    scientificName: `${withParticle(original.name, '이')} 봉인된 대타 인형`,
     category: '봉인',
     glyph: 'DOLL',
     assetPath: 'images/pathimon/substitute-doll.png',
@@ -479,7 +498,7 @@ export function applyFinalBossSkill(state: RunState, random: () => number = Math
     spriteCrop: { frontX: 0, backX: 64, width: 64, height: 64 },
   };
   enemy.finalBossSkillApplied = true;
-  nextState.lastLog = `${enemy.name}의 ${enemy.finalBossSkillName ?? '봉인'}! ${original.name}이 인형에 봉인되었다.`;
+  nextState.lastLog = `${enemy.name}의 ${enemy.finalBossSkillName ?? '봉인'}! ${withParticle(original.name, '이')} 인형에 봉인되었다.`;
 
   if (selected.index === nextState.activeIndex) {
     const replacementIndex = nextState.party.findIndex((monster, index) => index !== selected.index && canEnterBattle(monster));
@@ -521,13 +540,13 @@ function resolveHumanMove(
 
   const stagedMove = currentMoveData(enemyMove, enemy);
   if (failsToAct(enemy)) {
-    return { log: `${enemy.name}의 ${stagedMove.name}!\n${enemy.name}은 ${actionFailureLabel(enemy)}으로 움직이지 못했다.` };
+    return { log: `${enemy.name}의 ${stagedMove.name}!\n${withParticle(enemy.name, '은')} ${withParticle(actionFailureLabel(enemy), '으로')} 움직이지 못했다.` };
   }
 
   if (missesFromSensoryAbnormality(enemy)) {
     advanceStagedMove(enemy, enemyMove);
     applyAttackTriggeredStatusDamage(enemy);
-    return { log: `${enemy.name}의 ${stagedMove.name}!\n${enemy.name}의 공격이 ${sensoryMissLabel(enemy)}으로 빗나갔다.` };
+    return { log: `${enemy.name}의 ${stagedMove.name}!\n${enemy.name}의 공격이 ${withParticle(sensoryMissLabel(enemy), '으로')} 빗나갔다.` };
   }
 
   const resolvedMove = resolveMoveOutcome(stagedMove, Math.random());
@@ -611,13 +630,13 @@ function resolveEnemyTurn(
 
   const stagedMove = currentMoveData(enemyMove, enemy);
   if (failsToAct(enemy)) {
-    return { log: `${enemy.name}의 ${stagedMove.name}!\n${enemy.name}은 ${actionFailureLabel(enemy)}으로 움직이지 못했다.` };
+    return { log: `${enemy.name}의 ${stagedMove.name}!\n${withParticle(enemy.name, '은')} ${withParticle(actionFailureLabel(enemy), '으로')} 움직이지 못했다.` };
   }
 
   if (missesFromSensoryAbnormality(enemy)) {
     advanceStagedMove(enemy, enemyMove);
     applyAttackTriggeredStatusDamage(enemy);
-    return { log: `${enemy.name}의 ${stagedMove.name}!\n${enemy.name}의 공격이 ${sensoryMissLabel(enemy)}으로 빗나갔다.` };
+    return { log: `${enemy.name}의 ${stagedMove.name}!\n${enemy.name}의 공격이 ${withParticle(sensoryMissLabel(enemy), '으로')} 빗나갔다.` };
   }
 
   const resolvedMove = resolveMoveOutcome(stagedMove, Math.random());
@@ -756,6 +775,9 @@ export function resolvePlayerMove(
     return nextState;
   }
 
+  // 참전은 기술을 실제로 쓴 시점에 인정한다. 선두로 나가기만 하거나 교체로 들어오기만 한 것은 세지 않는다.
+  markEnteredBattle(actor);
+
   if (isHumanEnemy(enemy)) {
     planHumanMoves(enemy, actor, nextState.party, nextState.activeIndex);
   }
@@ -769,7 +791,7 @@ export function resolvePlayerMove(
       nextState,
       actor,
       enemy,
-      `${actor.name}의 ${stagedMove.name}!\n${actor.name}은 ${actionFailureLabel(actor)}으로 움직이지 못했다.`,
+      `${actor.name}의 ${stagedMove.name}!\n${withParticle(actor.name, '은')} ${withParticle(actionFailureLabel(actor), '으로')} 움직이지 못했다.`,
       enemyLog,
       defaultLearningDetail(nextState),
       battleLearnText(nextState, stagedMove),
@@ -784,7 +806,7 @@ export function resolvePlayerMove(
       nextState,
       actor,
       enemy,
-      `${actor.name}의 ${stagedMove.name}!\n${actor.name}의 공격이 ${sensoryMissLabel(actor)}으로 빗나갔다.`,
+      `${actor.name}의 ${stagedMove.name}!\n${actor.name}의 공격이 ${withParticle(sensoryMissLabel(actor), '으로')} 빗나갔다.`,
       enemyLog,
       defaultLearningDetail(nextState),
       battleLearnText(nextState, stagedMove),
@@ -827,7 +849,7 @@ export function resolvePassEncounter(state: RunState): RunState {
   nextState.party = nextState.party.map(clearBattleOnlyState);
   nextState.lastLog = floorClearLog(
     nextState,
-    `${enemy.name}와 거리를 두고 지나갔다.`,
+    `${withParticle(enemy.name, '와')} 거리를 두고 지나갔다.`,
     pathimonMemoDetail(enemy),
   );
   return nextState;
@@ -842,6 +864,7 @@ export function resolveForcedSwitchMonster(state: RunState, targetIndex: number)
     return nextState;
   }
 
+  clearStatStages(nextState.party[nextState.activeIndex]);
   nextState.activeIndex = targetIndex;
   nextState.pendingSwitchAttackReward = undefined;
   nextState.phase = 'battle';
@@ -849,7 +872,7 @@ export function resolveForcedSwitchMonster(state: RunState, targetIndex: number)
     clearPlannedHumanMoves(nextState.enemy);
     planHumanMoves(nextState.enemy, target, nextState.party, targetIndex);
   }
-  nextState.lastLog = `${target.name}이 나왔다.`;
+  nextState.lastLog = `${withParticle(target.name, '이')} 나왔다.`;
   return nextState;
 }
 
@@ -880,18 +903,19 @@ export function resolveSwitchMonster(
   const targetMultiplier = isHumanEnemy(enemy)
     ? announcedTreatmentMultiplier(enemy, target)
     : 1;
+  clearStatStages(previousActor);
   nextState.activeIndex = targetIndex;
   if (nextState.encounterKind === 'wild') {
     nextState.pendingSwitchAttackReward = undefined;
     nextState.phase = 'battle';
-    nextState.lastLog = `${target.name}이 나왔다.`;
+    nextState.lastLog = `${withParticle(target.name, '이')} 나왔다.`;
     return nextState;
   }
 
   nextState.pendingSwitchAttackReward = previousMultiplier > targetMultiplier && targetMultiplier === 1;
   nextState.lastLog = previousMultiplier > targetMultiplier
-    ? `${target.name}이 나왔다.\n교체 성공: 예상 피해 ×${previousMultiplier} → ×${targetMultiplier}로 감소!`
-    : `${target.name}이 나왔다.`;
+    ? `${withParticle(target.name, '이')} 나왔다.\n교체 성공: 예상 피해 ×${previousMultiplier} → ×${targetMultiplier}로 감소!`
+    : `${withParticle(target.name, '이')} 나왔다.`;
   nextState.phase = 'battle';
   return nextState;
 }
@@ -907,12 +931,12 @@ function completeCapturedEnemy(nextState: RunState, enemy: RuntimeMonster): RunS
   if (nextState.party.length >= MAX_PARTY_SIZE) {
     nextState.pendingCapture = captured;
     nextState.phase = 'releaseCapture';
-    nextState.lastLog = `${enemy.name}을 포획했습니다. 놓아줄 패시몬을 선택하세요.`;
+    nextState.lastLog = `${withParticle(enemy.name, '을')} 포획했습니다. 놓아줄 패시몬을 선택하세요.`;
     return nextState;
   }
 
   nextState.party.push(captured);
-  return setWinState(nextState, `${enemy.name}을 포획했습니다.`, undefined, pathimonMemoDetail(enemy));
+  return setWinState(nextState, `${withParticle(enemy.name, '을')} 포획했습니다.`, undefined, pathimonMemoDetail(enemy));
 }
 
 export function beginCaptureQuiz(state: RunState, capsuleId: CapsuleId): RunState {
@@ -936,7 +960,7 @@ export function beginCaptureQuiz(state: RunState, capsuleId: CapsuleId): RunStat
 
   const selectedCount = nextState.capsuleInventory[capsuleId] ?? 0;
   if (nextState.mode !== 'learning' && selectedCount <= 0) {
-    nextState.lastLog = `${CAPSULE_LABELS[capsuleId]}이 없습니다.`;
+    nextState.lastLog = `${withParticle(CAPSULE_LABELS[capsuleId], '이')} 없습니다.`;
     return nextState;
   }
 
@@ -946,7 +970,7 @@ export function beginCaptureQuiz(state: RunState, capsuleId: CapsuleId): RunStat
   }
   nextState.pendingCaptureCapsuleId = capsuleId;
   nextState.phase = 'battle';
-  nextState.lastLog = `${enemy.name}이 질문을 던진다...`;
+  nextState.lastLog = `${withParticle(enemy.name, '이')} 질문을 던진다...`;
   return nextState;
 }
 
@@ -977,7 +1001,7 @@ export function resolveCaptureQuizAnswer(state: RunState, correct: boolean): Run
   nextState.phase = 'battle';
   nextState.lastEnemyHitEffectiveness = 'normal';
   nextState.lastPlayerHitEffectiveness = undefined;
-  nextState.battleActionLog = `${enemy.name}이 질문을 던졌다.\n오답이다! ${actor.name}은 최대 체력의 ${damagePercent}% 피해를 입었다.`;
+  nextState.battleActionLog = `${withParticle(enemy.name, '이')} 질문을 던졌다.\n오답이다! ${withParticle(actor.name, '은')} 최대 체력의 ${damagePercent}% 피해를 입었다.`;
   nextState.battleStatusLog = undefined;
   nextState.battleStatusDamage = undefined;
   nextState.lastLog = nextState.battleActionLog;
@@ -1012,7 +1036,7 @@ export function resolveCapsuleAction(state: RunState, rollOrCapsule: number | Ca
 
   if (!learningMode && selectedCount <= 0) {
     nextState.phase = 'battle';
-    nextState.lastLog = `${CAPSULE_LABELS[capsuleId]}이 없습니다.`;
+    nextState.lastLog = `${withParticle(CAPSULE_LABELS[capsuleId], '이')} 없습니다.`;
     return nextState;
   }
 
@@ -1057,7 +1081,7 @@ export function resolveCaptureRelease(state: RunState, releaseIndex: number): Ru
   nextState.pendingCapture = undefined;
   nextState.party = nextState.party.map(clearBattleOnlyState);
   nextState.phase = 'floorClear';
-  nextState.lastLog = `${releasedName}을 놓아주고 ${pendingCapture.name}을 데려갑니다.`;
+  nextState.lastLog = `${withParticle(releasedName, '을')} 놓아주고 ${withParticle(pendingCapture.name, '을')} 데려갑니다.`;
   return nextState;
 }
 
@@ -1068,6 +1092,6 @@ export function cancelPendingCapture(state: RunState): RunState {
   nextState.pendingCapture = undefined;
   nextState.party = nextState.party.map(clearBattleOnlyState);
   nextState.phase = 'floorClear';
-  nextState.lastLog = `${pendingName}을 보내주고 다음 층으로 향합니다.`;
+  nextState.lastLog = `${withParticle(pendingName, '을')} 보내주고 다음 층으로 향합니다.`;
   return nextState;
 }

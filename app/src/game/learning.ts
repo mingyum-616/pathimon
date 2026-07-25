@@ -1,4 +1,5 @@
 import type { MoveId, RuntimeMonster } from '../types/game';
+import { withParticle } from './text';
 
 export function sanitizeLearningText(text: string): string {
   return text
@@ -68,7 +69,7 @@ export function pickCaptureQuiz(
   const point = randomLearningPoint(monster, random);
   const statement = point ? quizStatement(point) : '';
   return {
-    statement: statement || `${monster?.name ?? '이 패시몬'}은 현재 분류와 일치하는 특징을 가진다.`,
+    statement: statement || `${withParticle(monster?.name ?? '이 패시몬', '은')} 현재 분류와 일치하는 특징을 가진다.`,
     answer: true,
     explain: statement,
   };

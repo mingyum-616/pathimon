@@ -6,9 +6,15 @@ import { createBossInstance, createMonsterInstance } from '../state/factory';
 import { BOSS_ATTACK_MOVE_IDS } from '../data/bossAttackMatchups';
 import type { EffectPrimitive, MonsterData, RunState, RuntimeMonster } from '../types/game';
 import { tryCapture } from './capture';
-import { calculateDamage, criticalHitChance, randomDamageVariance, rollsCriticalHit } from './damage';
+import {
+  calculateDamage,
+  compressedDefense,
+  criticalHitChance,
+  randomDamageVariance,
+  rollsCriticalHit,
+} from './damage';
 import { applyEffects, tickEffects } from './effects';
-import { calculateMultiplier } from './effectiveness';
+import { calculateMultiplier, RESISTANCE_FLOOR } from './effectiveness';
 import { buildLoadout, buildMoveSlots } from './loadout';
 import { currentMoveData, currentMoveName } from './moveStages';
 import {
@@ -178,7 +184,7 @@ describe('battle engine', () => {
     const result = calculateMultiplier(MOVES.hyaluronidase, attacker, defender);
 
     expect(result.total).toBe(0.5);
-    expect(result.notes).toContain('점액섬모가 호흡기 태그를 반감했다');
+    expect(result.notes).toContain('마스크가 호흡기 태그를 반감했다');
   });
 
   it('applies every listed defense trait when calculating type matchup', () => {
@@ -222,6 +228,31 @@ describe('battle engine', () => {
 
     expect(result.damage).toBe(14);
     expect(result.multiplier.total).toBe(0.5);
+  });
+
+  it('compresses pathimon defense toward the pivot so the 25~95 spread folds to 46~74', () => {
+    expect(compressedDefense(25)).toBe(46);
+    expect(compressedDefense(60)).toBe(60);
+    expect(compressedDefense(95)).toBe(74);
+    // 레거시 대표종의 한 자릿수 방어는 다른 스케일이라 건드리지 않는다.
+    expect(compressedDefense(3)).toBe(3);
+
+    const glass = createMonster({ defense: 25 });
+    const wall = createMonster({ defense: 95 });
+    const strong = createMonster({ attack: 1000 });
+    const glassDamage = calculateDamage(strong, glass, MOVES.hyaluronidase, 1).damage;
+    const wallDamage = calculateDamage(strong, wall, MOVES.hyaluronidase, 1).damage;
+
+    expect(glassDamage / wallDamage).toBeLessThan(2);
+  });
+
+  it('leaves boss and trainer defense uncompressed because it is a design constant', () => {
+    const boss = createMonster({ defense: 8, isBoss: true });
+    const pathimon = createMonster({ defense: 8 });
+    const strong = createMonster({ attack: 1000 });
+
+    expect(calculateDamage(strong, boss, MOVES.hyaluronidase, 1).damage)
+      .toBe(calculateDamage(strong, pathimon, MOVES.hyaluronidase, 1).damage);
   });
 
   it('generates damage variance from 0.85 to 1.00', () => {
@@ -326,7 +357,49 @@ describe('battle engine', () => {
     const result = calculateMultiplier(MOVES.hyaluronidase, attacker, defender);
 
     expect(result.total).toBe(0.5);
-    expect(result.notes).toContain('라이소자임이 그람양성 태그를 반감했다');
+    expect(result.notes).toContain('라이소자임이 그람+ 태그를 반감했다');
+  });
+
+  it('halves damage by the attacking pathimon category for boss mastery traits', () => {
+    const bacterialAttacker = createMonster({ category: '세균' });
+    const viralAttacker = createMonster({ category: '바이러스' });
+    const defender = createMonster({ ability: 'bacteriology_master', abilities: ['bacteriology_master'] });
+
+    expect(calculateMultiplier(MOVES.hyaluronidase, bacterialAttacker, defender).total).toBe(0.5);
+    expect(calculateMultiplier(MOVES.hyaluronidase, bacterialAttacker, defender).notes)
+      .toContain('세균학 마스터가 세균 계열 공격을 반감했다');
+    expect(calculateMultiplier(MOVES.hyaluronidase, viralAttacker, defender).total).toBe(1);
+  });
+
+  it('halves damage by infection pathway, wall, location, and size axes', () => {
+    // attacker: pathway respiratory, wall gram_positive, location extracellular, category 세균
+    const large = createMonster({ tags: { size: 'large' } });
+
+    expect(calculateMultiplier(MOVES.hyaluronidase, attacker, createMonster({ ability: 'mask' })).total).toBe(0.5);
+    expect(calculateMultiplier(MOVES.hyaluronidase, attacker, createMonster({ ability: 'endotoxin_neutralization' })).total).toBe(1);
+    expect(calculateMultiplier(MOVES.hyaluronidase, attacker, createMonster({ ability: 'humoral_patrol' })).total).toBe(0.5);
+    expect(calculateMultiplier(MOVES.hyaluronidase, large, createMonster({ ability: 'eosinophil_recruitment' })).total).toBe(0.5);
+  });
+
+  it('stacks boss defense traits but stops at the resistance floor', () => {
+    const twoTraits = createMonster({
+      ability: 'mask',
+      abilities: ['mask', 'bacteriology_master'],
+    });
+    const fourTraits = createMonster({
+      ability: 'mask',
+      abilities: ['mask', 'bacteriology_master', 'humoral_patrol', 'lysozyme'],
+    });
+
+    expect(calculateMultiplier(MOVES.hyaluronidase, attacker, twoTraits).total).toBe(0.25);
+    // 네 겹이면 0.0625지만 하한에서 멈춘다.
+    expect(calculateMultiplier(MOVES.hyaluronidase, attacker, fourTraits).total).toBe(RESISTANCE_FLOOR);
+  });
+
+  it('keeps explicit immunities at zero instead of raising them to the resistance floor', () => {
+    const antitoxinTarget = createMonster({ ability: 'antitoxin', abilities: ['antitoxin'] });
+
+    expect(calculateMultiplier(MOVES.cholera_toxin, attacker, antitoxinTarget).total).toBe(0);
   });
 
   it('clamps the type-table portion of multipliers to three', () => {
@@ -407,8 +480,9 @@ describe('battle engine', () => {
     const abnormalTarget = createMonster({ ability: 'capsule', abilities: ['capsule'], statusConditions: { immune_abnormal: 4 } });
 
     expect(calculateDamage(attacker, dyspneicTarget, MOVES.hyaluronidase, 1).damage).toBeGreaterThan(normalDamage);
-    // 공격 10 대 방어 50이면 피해가 2라 반올림에 묻힌다. 공격을 올려 해상도를 확보한다.
-    const strongAttacker = createMonster({ attack: 100 });
+    // 방어 압축(damage.ts compressedDefense)이 50을 56으로 접어 통증·혈압 감소분이 반올림에 묻힌다.
+    // 공격을 크게 잡아 세 값이 갈리는 해상도를 확보한다.
+    const strongAttacker = createMonster({ attack: 1000 });
     const sturdyDamage = calculateDamage(strongAttacker, sturdyTarget, MOVES.hyaluronidase, 1).damage;
     const painedDamage = calculateDamage(strongAttacker, painedTarget, MOVES.hyaluronidase, 1).damage;
     expect(painedDamage).toBeGreaterThan(sturdyDamage);

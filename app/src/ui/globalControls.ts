@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { getAudioMuted, onAudioMutedChange, toggleAudioMuted } from '../audio/audioSettings';
-import { APP_HEIGHT, APP_WIDTH } from '../game/constants';
+import { APP_HEIGHT, APP_WIDTH, FONT_FAMILY } from '../game/constants';
 import { gameGuideContent } from './gameGuideUi';
 
 export function globalControlLabels(): { guide: string; mute: string; unmute: string } {
@@ -24,7 +24,7 @@ function createButton(label: string, text: string): HTMLButtonElement {
     color: '#fff',
     cursor: 'pointer',
     display: 'flex',
-    fontFamily: '"Malgun Gothic", Arial, sans-serif',
+    fontFamily: FONT_FAMILY,
     fontSize: '18px',
     height: '34px',
     justifyContent: 'center',
@@ -59,7 +59,7 @@ function openGuide(game: Phaser.Game): void {
     background: '#302840',
     border: '2px solid #72d6ff',
     color: '#f5f1fa',
-    fontFamily: '"Malgun Gothic", Arial, sans-serif',
+    fontFamily: FONT_FAMILY,
     maxHeight: 'min(82vh, 660px)',
     maxWidth: '820px',
     overflowY: 'auto',

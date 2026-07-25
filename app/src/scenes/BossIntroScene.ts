@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { applyFinalBossSkill } from '../battle/turn';
 import type { RunState } from '../types/game';
 import { APP_WIDTH, APP_HEIGHT, COLORS } from '../game/constants';
+import { withParticle } from '../game/text';
 import { addBoxLabel, addLabel, drawPanel } from '../ui/draw';
 import { defenseTraitSummary } from '../ui/battleUi';
 import { keyboardCommand } from '../ui/keyboard';
@@ -34,7 +35,7 @@ export class BossIntroScene extends Phaser.Scene {
     const enemy = this.state.enemy;
     this.dialogueLines = enemy?.encounterDialogue?.length
       ? [...enemy.encounterDialogue]
-      : [`${enemy?.name ?? '보스'}이 길을 막아섰다.`];
+      : [`${withParticle(enemy?.name ?? '보스', '이')} 길을 막아섰다.`];
     if (this.state.floor === 100 && enemy?.finalBossSkillAnnouncement) {
       this.dialogueLines.push(enemy.finalBossSkillAnnouncement);
     }

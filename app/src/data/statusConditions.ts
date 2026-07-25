@@ -124,6 +124,15 @@ export function hasStatusConditions(monster: RuntimeMonster): boolean {
   return STATUS_CONDITION_IDS.some((id) => statusConditionStacks(monster, id) > 0);
 }
 
+// 상태이상 도트는 최대 체력 %로 들어가서 적 HP와 무관하게 누적된다.
+// 상한이 없으면 전투가 길어질수록 도트가 기술 위력을 완전히 덮어써서 기술 선택이 무의미해진다.
+// 5스택에서 끊으면 발열 단독 최대 10%/턴이라 누적 전략은 살아 있고, 폭주는 막힌다.
+export const MAX_STATUS_CONDITION_STACKS = 5;
+
+export function isStatusConditionAtMaxStacks(monster: RuntimeMonster, id: StatusConditionId): boolean {
+  return statusConditionStacks(monster, id) >= MAX_STATUS_CONDITION_STACKS;
+}
+
 export function addStatusCondition(monster: RuntimeMonster, id: StatusConditionId, stacks = 1): void {
   if (stacks <= 0) {
     return;
@@ -131,10 +140,16 @@ export function addStatusCondition(monster: RuntimeMonster, id: StatusConditionI
 
   monster.statusConditions = {
     ...(monster.statusConditions ?? {}),
-    [id]: statusConditionStacks(monster, id) + stacks,
+    [id]: Math.min(MAX_STATUS_CONDITION_STACKS, statusConditionStacks(monster, id) + stacks),
   };
 
   clampHpToEffectiveMax(monster);
+}
+
+export function statusConditionStackLabel(id: StatusConditionId, stacks: number): string {
+  const label = STATUS_CONDITIONS[id].label;
+  if (stacks <= 1) return label;
+  return stacks >= MAX_STATUS_CONDITION_STACKS ? `${label}(${stacks}) MAX` : `${label}(${stacks})`;
 }
 
 export function statusConditionLabels(monster: RuntimeMonster): string[] {
@@ -142,8 +157,7 @@ export function statusConditionLabels(monster: RuntimeMonster): string[] {
     .map((id) => {
       const stacks = statusConditionStacks(monster, id);
       if (stacks <= 0) return undefined;
-      const label = STATUS_CONDITIONS[id].label;
-      return stacks > 1 ? `${label}(${stacks})` : label;
+      return statusConditionStackLabel(id, stacks);
     })
     .filter((label): label is string => Boolean(label));
 }

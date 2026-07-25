@@ -256,6 +256,12 @@ describe('battle UI helpers', () => {
     expect(partyMenuOptions('forced')).toEqual(['교체한다', '능력치를 본다']);
   });
 
+  it('offers a free evolution entry only when the selected pathimon can evolve', () => {
+    expect(partyMenuOptions('switch', true)).toEqual(['교체한다', '진화한다', '능력치를 본다', '그만둔다']);
+    expect(partyMenuOptions('forced', true)).toEqual(['교체한다', '진화한다', '능력치를 본다']);
+    expect(partyMenuOptions('release', true)).toEqual(['놓아준다', '능력치를 본다', '그만둔다']);
+  });
+
   it('derives pokerogue atlas json paths from sprite png paths', () => {
     expect(pokerogueAtlasJsonPath('images/pokemon/back/10.png')).toBe('images/pokemon/back/10.json');
   });

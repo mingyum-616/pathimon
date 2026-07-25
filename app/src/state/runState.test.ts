@@ -12,12 +12,25 @@ import {
   resolveSwitchMonster,
 } from '../battle/turn';
 import { MOVES } from '../data/moves';
-import { createDistributedWildRoster, STARTER_ID, TOTAL_FLOORS, wildEncounterRoster } from '../data/monsters';
+import {
+  createDistributedWildRoster,
+  EARLY_BAND_MAX_BST,
+  LATE_BAND_MIN_BST,
+  lateBandWildSlotCount,
+  monsterBaseStatTotal,
+  STARTER_ID,
+  TOTAL_FLOORS,
+  wildEncounterRoster,
+} from '../data/monsters';
 import { NOTE_MONSTERS } from '../data/pathimonNoteData';
+import { createMonsterInstance } from './factory';
 import {
   advanceFromShop,
+  canEvolvePartyMember,
+  EVOLUTION_REQUIRED_BATTLES,
   canUseEvolutionStoneOnPartyMember,
   createInitialRunState,
+  evolvePartyMember,
   encounterKindForFloor,
   enterBattle,
   healPartyMember,
@@ -206,6 +219,40 @@ describe('run state loop', () => {
     }
   });
 
+  it('draws early floors from the low band pool and late floors from the high band pool', () => {
+    const roster = createDistributedWildRoster(wildEncounterRoster());
+    const lateSlots = lateBandWildSlotCount();
+    const earlyRoster = roster.slice(0, roster.length - lateSlots);
+    const lateRoster = roster.slice(roster.length - lateSlots);
+
+    expect(roster).toHaveLength(80);
+    expect(lateSlots).toBe(32);
+    expect(earlyRoster.every((monster) => monsterBaseStatTotal(monster) <= EARLY_BAND_MAX_BST)).toBe(true);
+    expect(lateRoster.every((monster) => monsterBaseStatTotal(monster) >= LATE_BAND_MIN_BST)).toBe(true);
+  });
+
+  it('shuffles inside each band instead of sorting the whole roster by stat total', () => {
+    const roster = createDistributedWildRoster(wildEncounterRoster());
+    const earlyTotals = roster
+      .slice(0, roster.length - lateBandWildSlotCount())
+      .map(monsterBaseStatTotal);
+    const isAscending = earlyTotals.every((total, index) => index === 0 || total >= earlyTotals[index - 1]);
+
+    expect(isAscending).toBe(false);
+  });
+
+  it('falls back to the available pool when a band has too few pathimon', () => {
+    const source = [
+      testMonster('bacteria-1', '세균'),
+      testMonster('virus-1', '바이러스'),
+      testMonster('parasite-1', '기생충'),
+    ];
+
+    const roster = createDistributedWildRoster(source, Math.random, 2, 2);
+
+    expect(roster.map((monster) => monster.id).sort()).toEqual(source.map((monster) => monster.id).sort());
+  });
+
   it('keeps note-managed pathimon available in the wild encounter roster', () => {
     const openingRouteIds = NOTE_MONSTERS_NEWEST_FIRST.map((monster) => monster.id);
 
@@ -363,6 +410,7 @@ describe('run state loop', () => {
   it('spends a capsule before the OX quiz and guarantees capture after a correct answer', () => {
     const battle = enterBattle(createInitialRunState('challenge'));
     if (!battle.enemy) throw new Error('enemy missing');
+    battle.enemy.name = '대장콜리';
     battle.enemy.captureRate = 0.01;
     const random = vi.spyOn(Math, 'random').mockReturnValue(0.99);
 
@@ -372,6 +420,7 @@ describe('run state loop', () => {
 
     expect(quiz.capsuleInventory.universal).toBe(4);
     expect(quiz.pendingCaptureCapsuleId).toBe('universal');
+    expect(quiz.lastLog).toBe('대장콜리가 질문을 던진다...');
     expect(captured.phase).toBe('floorClear');
     expect(captured.party).toHaveLength(2);
   });
@@ -923,7 +972,6 @@ describe('run state loop', () => {
 
     const result = purchaseShopItemForPartyMember(state, 'slot-rare-candy', 0);
 
-    expect(result.money).toBe(0);
     expect(result.party[0].signatureUnlocked).toBe(true);
     expect(result.party[1].signatureUnlocked).toBe(false);
     expect(result.shopInventory?.find((item) => item.id === 'slot-rare-candy')?.purchased).toBe(true);
@@ -997,7 +1045,6 @@ describe('run state loop', () => {
 
     const result = purchaseShopItemForPartyMember(state, 'slot-evolution-stone', 0, [larva, adult]);
 
-    expect(result.money).toBe(0);
     expect(result.party[0].templateId).toBe('trichinella-adult');
     expect(result.party[0].name).toBe('Trichinella spiralis-성충');
     expect(result.party[0].hp).toBe(12);
@@ -1015,11 +1062,95 @@ describe('run state loop', () => {
 
     const result = purchaseShopItemForPartyMember(state, 'slot-evolution-stone', 0);
 
-    expect(result.money).toBe(0);
     expect(result.party[0].templateId).toBe('ascaris_larva');
     expect(result.party[0].name).toContain('유충');
     expect(result.party[0].attack).toBeGreaterThan(state.party[0].attack);
     expect(result.lastLog).toContain('진화');
+  });
+
+  it('evolves a party member for free from the party screen in learning mode', () => {
+    const state = createInitialRunState('learning', 'character', 'ascaris');
+    state.money = 0;
+    state.party[0].hp = 7;
+    state.party[0].battlesCompleted = EVOLUTION_REQUIRED_BATTLES;
+
+    expect(canEvolvePartyMember(state, 0)).toBe(true);
+
+    const result = evolvePartyMember(state, 0);
+
+    expect(result.money).toBe(0);
+    expect(result.party[0].templateId).toBe('ascaris_larva');
+    expect(result.party[0].hp).toBe(7);
+    expect(result.party[0].attack).toBeGreaterThan(state.party[0].attack);
+    expect(result.lastLog).toContain('진화');
+    // 다음 단계도 다시 한 번 싸워야 한다.
+    expect(result.party[0].battlesCompleted).toBe(0);
+  });
+
+  it('refuses a free evolution until the pathimon has finished a battle, and says so only when pressed', () => {
+    const state = createInitialRunState('learning', 'character', 'ascaris');
+    state.party[0].battlesCompleted = 0;
+
+    // 조건은 메뉴에 미리 표시하지 않는다. 진화 항목 자체는 그대로 뜬다.
+    expect(canEvolvePartyMember(state, 0)).toBe(true);
+
+    const result = evolvePartyMember(state, 0);
+
+    expect(result.party[0].templateId).toBe('ascaris');
+    expect(result.lastLog).toContain('아직 전투 경험이 없습니다');
+  });
+
+  it('counts a finished battle only for pathimon that actually used a move', () => {
+    const state = createInitialRunState('learning');
+    state.party.push(createMonsterInstance(NOTE_MONSTERS[1]));
+    const battle = enterBattle({ ...state, floor: 5 });
+    if (!battle.enemy) throw new Error('no enemy');
+
+    // 나가기만 한 상태에서는 아직 참전이 아니다.
+    expect(battle.party[0].enteredCurrentBattle).toBeFalsy();
+
+    battle.enemy.hp = 1;
+    const won = resolvePlayerMove(battle, 'hyaluronidase', 1, 0, 0);
+
+    expect(won.phase).not.toBe('battle');
+
+    expect(won.party[0].battlesCompleted).toBe(1);
+    // 벤치에 앉아만 있던 패시몬은 세지 않는다.
+    expect(won.party[1].battlesCompleted ?? 0).toBe(0);
+  });
+
+  it('does not count passing an encounter as a finished battle', () => {
+    const state = createInitialRunState('learning');
+    const battle = enterBattle(state);
+
+    const passed = resolvePassEncounter(battle);
+
+    expect(passed.party[0].battlesCompleted ?? 0).toBe(0);
+  });
+
+  it('resets stat stages when a pathimon switches out, like the main series', () => {
+    const state = createInitialRunState('learning');
+    state.party.push(createMonsterInstance(NOTE_MONSTERS[1]));
+    const battle = enterBattle({ ...state, floor: 5 });
+    battle.party[0].effects.push({ kind: 'buff', stat: 'attack', pct: 50, rank: 1, turns: 99 });
+    battle.party[0].effects.push({ kind: 'field', side: 'incoming', factor: 0.5, turns: 2 });
+
+    const switched = resolveSwitchMonster(battle, 1);
+
+    expect(switched.party[0].effects.some((effect) => effect.kind === 'buff')).toBe(false);
+    // 랭크만 초기화한다. 다른 지속 효과는 건드리지 않는다.
+    expect(switched.party[0].effects.some((effect) => effect.kind === 'field')).toBe(true);
+  });
+
+  it('leaves the party untouched when a free evolution has no target', () => {
+    const state = createInitialRunState('learning', 'character', 'anthrax');
+
+    expect(canEvolvePartyMember(state, 0)).toBe(false);
+
+    const result = evolvePartyMember(state, 0);
+
+    expect(result.party[0].templateId).toBe('anthrax');
+    expect(result.lastLog).toContain('진화할 수 없습니다');
   });
 
   it('spends one money to fully heal a selected pathimon in maintenance', () => {

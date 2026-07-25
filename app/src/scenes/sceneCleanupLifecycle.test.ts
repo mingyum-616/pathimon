@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import battleSceneSource from './BattleScene.ts?raw';
-import battleUiSource from '../ui/battleUi.ts?raw';
 import shopSceneSource from './ShopScene.ts?raw';
 
 function assertSceneCleanupLifecycle(source: string): void {
@@ -59,11 +58,6 @@ describe('scene cleanup lifecycle wiring', () => {
     expect(battleSceneSource).toContain('floorClearPage');
     expect(battleSceneSource).toContain('advanceFloorClearDetail');
     expect(battleSceneSource).toContain('다음 내용');
-  });
-
-  it('labels enemy treatments as effective against the active pathimon', () => {
-    expect(battleUiSource).toContain("'효과 기술'");
-    expect(battleUiSource).toContain('현재 선출${defender ? `: ${defender.name}` : \'\'}에게 효과적인 적의 처치');
   });
 
   it('renders the dex move table with column headers and a multiplier chip', () => {

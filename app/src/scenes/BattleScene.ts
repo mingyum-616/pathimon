@@ -24,13 +24,16 @@ import {
   sanitizeLearningText,
   type CaptureQuiz,
 } from '../game/learning';
+import { withParticle } from '../game/text';
 import {
   advanceFromShop,
   canEvolvePartyMember,
   createInitialRunState,
   encounterKindForFloor,
   enterBattle,
+  evolutionRequirementText,
   evolvePartyMember,
+  isEvolutionReadyForPartyMember,
 } from '../state/runState';
 import type { CapsuleId, HitEffectiveness, MoveId, RunState, RuntimeMonster } from '../types/game';
 import { COLORS, APP_WIDTH, APP_HEIGHT, FONT_FAMILY } from '../game/constants';
@@ -63,8 +66,10 @@ import {
   hpPct,
   hpPercentLabel,
   lockedMoveOverlayPath,
+  matchupGateCopy,
   mobileControlOverlayInteractive,
   mobileHomeButtonLayout,
+  shouldGateMatchupTable,
   normalizedSpriteScale,
   paginateWrappedTextBlocks,
   partyMenuOptions,
@@ -79,7 +84,7 @@ import {
   stripMarkdownEmphasis,
   symptomDetailLines,
 } from '../ui/battleUi';
-import type { BattleActionId, BattleUnitPanelRole, PartyMenuPurpose, PathimonTypeIcon } from '../ui/battleUi';
+import type { BattleActionId, BattleUnitPanelRole, MatchupGateCopy, PartyMenuPurpose, PathimonTypeIcon } from '../ui/battleUi';
 import { destroySceneChildren } from '../ui/sceneCleanup';
 import { addBoxLabel, addLabel, drawHpBar, drawPanel } from '../ui/draw';
 import { MIN_TEXT_SIZE, MUTED_ALPHA, TEXT } from '../ui/typography';
@@ -123,6 +128,9 @@ export class BattleScene extends Phaser.Scene {
   private dexTab: DexTab = 'moves';
   // 기술표에서 설명 한 줄을 띄울 대상 행.
   private dexRowCursor = 0;
+  // 상성표 도발 문구. 떠 있는 동안에는 표 대신 이 패널을 그린다.
+  private matchupGatePrompt?: MatchupGateCopy;
+  private matchupGateAcknowledged = false;
   private statusTab: StatusTab = 'profile';
   private notice = '';
   private commandCursor = 0;
@@ -166,6 +174,8 @@ export class BattleScene extends Phaser.Scene {
     this.armedMoveId = this.selectedMoveId;
     this.viewMode = 'command';
     this.dexTab = 'moves';
+    this.matchupGatePrompt = undefined;
+    this.matchupGateAcknowledged = false;
     this.statusTab = 'profile';
     this.notice = this.state.lastLog;
     this.commandCursor = 0;
@@ -745,7 +755,7 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
-    addLabel(this, 34, 406, `${enemy.name}이 질문을 던진다...`, 22).setColor('#72d6ff');
+    addLabel(this, 34, 406, `${withParticle(enemy.name, '이')} 질문을 던진다...`, 22).setColor('#72d6ff');
     addLabel(this, 36, 442, '핵심 문장', 14).setAlpha(0.72);
     addBoxLabel(this, 36, 466, quiz?.statement ?? '질문을 불러오는 중입니다.', {
       width: 670,
@@ -1008,7 +1018,7 @@ export class BattleScene extends Phaser.Scene {
     // 대상 계열을 칩으로 세우고 같은 계열 캡슐에도 표시를 달아 둘을 눈으로 잇는다.
     this.add.rectangle(36, 450, 132, 26, COLORS.chipMedium, 0.95).setOrigin(0);
     addLabel(this, 102, 463, `계열: ${enemy.category}`, TEXT.label).setOrigin(0.5);
-    addBoxLabel(this, 36, 486, this.notice || `${player.name}은 캡슐을 준비했다.`, { width: 560, height: 48, size: TEXT.body, maxLines: 2, color: COLORS.muted });
+    addBoxLabel(this, 36, 486, this.notice || `${withParticle(player.name, '은')} 캡슐을 준비했다.`, { width: 560, height: 48, size: TEXT.body, maxLines: 2, color: COLORS.muted });
 
     const panelX = 602;
     const panelY = 92;
@@ -1046,13 +1056,12 @@ export class BattleScene extends Phaser.Scene {
       this.dexTab = 'moves';
       this.render();
     }, this.dexTab === 'moves');
-    this.drawMenuButton(134, 512, 84, 32, '상성표', () => {
-      this.dexTab = 'effectiveness';
-      this.render();
-    }, this.dexTab === 'effectiveness');
+    this.drawMenuButton(134, 512, 84, 32, '상성표', () => this.requestMatchupTable(), this.dexTab === 'effectiveness');
 
     drawPanel(this, 220, 392, 628, 176).setAlpha(0.98);
-    if (this.dexTab === 'moves') {
+    if (this.matchupGatePrompt) {
+      this.drawMatchupGate();
+    } else if (this.dexTab === 'moves') {
       this.drawDexMoveTable(dex);
     } else if (enemy.isTrainer) {
       this.drawAnnouncedTreatmentMatchups(enemy);
@@ -1061,9 +1070,61 @@ export class BattleScene extends Phaser.Scene {
     }
 
     this.drawMenuButton(862, 392, 120, 34, '뒤로', () => {
+      this.matchupGatePrompt = undefined;
       this.viewMode = 'command';
       this.render();
     });
+  }
+
+  // 상성표는 사실상 정답표다. 도전모드에서는 전투당 한 번, 열기 전에 한마디 던진다.
+  private requestMatchupTable(): void {
+    if (this.dexTab === 'effectiveness') return;
+    if (shouldGateMatchupTable({ mode: this.state.mode, alreadyAcknowledged: this.matchupGateAcknowledged })) {
+      this.matchupGatePrompt = matchupGateCopy(Math.random());
+      this.render();
+      return;
+    }
+    this.dexTab = 'effectiveness';
+    this.render();
+  }
+
+  private drawMatchupGate(): void {
+    const gate = this.matchupGatePrompt;
+    if (!gate) return;
+
+    addBoxLabel(this, 238, 404, gate.title, {
+      width: 586,
+      height: 20,
+      size: TEXT.label,
+      maxLines: 1,
+      color: COLORS.muted,
+    });
+    addBoxLabel(this, 238, 434, gate.taunt, {
+      width: 586,
+      height: 34,
+      size: TEXT.title,
+      maxLines: 1,
+      color: '#ffd479',
+    });
+    addBoxLabel(this, 238, 476, gate.subtitle, {
+      width: 586,
+      height: 20,
+      size: TEXT.caption,
+      maxLines: 1,
+      color: COLORS.muted,
+    });
+
+    this.drawMenuButton(238, 510, 200, 40, gate.confirmLabel, () => {
+      this.matchupGateAcknowledged = true;
+      this.matchupGatePrompt = undefined;
+      this.dexTab = 'effectiveness';
+      this.render();
+    });
+    this.drawMenuButton(456, 510, 200, 40, gate.cancelLabel, () => {
+      this.matchupGatePrompt = undefined;
+      this.dexTab = 'moves';
+      this.render();
+    }, true);
   }
 
   // 도감·상성표는 이름만으로 누구 얘기인지 알기 어렵다. 작은 초상을 붙여 대상을 고정한다.
@@ -1862,7 +1923,7 @@ export class BattleScene extends Phaser.Scene {
     const purpose = this.partyPurpose();
     const selected = this.state.party[this.partyCursor];
     const prompt = this.partyNotice ?? (purpose === 'release'
-      ? `${this.state.pendingCapture?.name ?? '새 패시몬'}을 데려가려면 놓아줄 패시몬을 선택하세요.`
+      ? `${withParticle(this.state.pendingCapture?.name ?? '새 패시몬', '을')} 데려가려면 놓아줄 패시몬을 선택하세요.`
       : purpose === 'forced'
         ? '다음에 내보낼 패시몬을 선택하세요.'
         : this.state.floor === 5 && this.state.enemy?.isTrainer
@@ -1976,18 +2037,32 @@ export class BattleScene extends Phaser.Scene {
 
   private drawPartySubmenu(_purpose: PartyMenuPurpose): void {
     const options = this.currentPartyMenuOptions();
+    // 진화는 항목을 계속 보여줘서 존재를 알리되, 조건 미달이면 비활성으로 그리고 이유를 함께 적는다.
+    const evolutionLocked = options.includes('진화한다')
+      && !isEvolutionReadyForPartyMember(this.state, this.partyCursor);
     const x = 706;
-    const y = Math.min(368, 92 + this.partyCursor * 54);
+    const y = Math.min(360, 92 + this.partyCursor * 54);
     const width = 250;
-    const height = 24 + options.length * 42;
+    const height = 24 + options.length * 42 + (evolutionLocked ? 22 : 0);
     drawPanel(this, x, y, width, height).setAlpha(0.98);
 
     options.forEach((label, index) => {
+      const disabled = label === '진화한다' && evolutionLocked;
       this.drawMenuButton(x + 18, y + 16 + index * 42, width - 36, 34, label, () => {
         this.partyMenuCursor = index;
         this.handlePartyMenuOption(label);
-      }, this.partyMenuCursor === index);
+      }, this.partyMenuCursor === index && !disabled, disabled);
     });
+
+    if (evolutionLocked) {
+      addBoxLabel(this, x + 18, y + 20 + options.length * 42, evolutionRequirementText(), {
+        width: width - 36,
+        height: 18,
+        size: TEXT.caption,
+        maxLines: 1,
+        color: COLORS.muted,
+      });
+    }
   }
 
   private handlePartyMenuOption(label: string): void {
@@ -2279,9 +2354,14 @@ export class BattleScene extends Phaser.Scene {
     }
 
     if (this.viewMode === 'dex' && this.state.phase === 'battle') {
+      if (this.matchupGatePrompt) return;
       if (direction === 'left' || direction === 'right') {
-        this.dexTab = this.dexTab === 'moves' ? 'effectiveness' : 'moves';
         this.dexRowCursor = 0;
+        if (this.dexTab === 'moves') {
+          this.requestMatchupTable();
+          return;
+        }
+        this.dexTab = 'moves';
         this.render();
         return;
       }

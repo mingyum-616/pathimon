@@ -49,6 +49,8 @@ export function createMonsterInstance(data: MonsterData, options: CreateMonsterO
       direct: [...data.countermeasures.direct],
       symptomTags: [...data.countermeasures.symptomTags],
     } : undefined,
+    battlesCompleted: 0,
+    enteredCurrentBattle: false,
     effects: [],
     statusConditions: {},
     stunned: false,
