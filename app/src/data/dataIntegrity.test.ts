@@ -5,7 +5,7 @@ import { BOSSES, BOSS_COMBAT_STATS, LATE_GAME_BOSS_IDS, createBossRosterIds } fr
 import { BOSS_ATTACK_MOVE_IDS } from './bossAttackMatchups';
 import { EFFECTIVENESS } from './effectiveness';
 import { MONSTERS, STARTER_ID, TOTAL_FLOORS } from './monsters';
-import { TRAINERS, TRAINER_COMBAT_STATS } from './trainers';
+import { TRAINERS } from './trainers';
 import { BOSS_CHARACTER_ASSETS, TRAINER_CHARACTER_ASSETS } from './characterAssets';
 import { buildLoadout, buildMoveSlots } from '../battle/loadout';
 import { MOVES } from './moves';
@@ -475,15 +475,16 @@ describe('Pathimon data', () => {
     expect(boss.symptoms).toEqual([]);
   });
 
-  it('sets trainer runtime hp to one quarter of the paired boss hp', () => {
+  it('sets trainer runtime hp and attack below the paired boss values', () => {
     const boss = createBossInstance(0, 10);
     const trainer = createTrainerInstance(0);
 
-    // 1/5은 트레이너 전투가 2턴으로 너무 짧아 1/4로 올렸다. 스탯은 보스와 동일하고 HP만 다르다.
+    // 1/5은 트레이너 전투가 2턴으로 너무 짧아 1/4로 올렸다.
     expect(trainer.maxHp).toBe(Math.round(boss.maxHp / 4));
     expect(trainer.hp).toBe(Math.round(boss.maxHp / 4));
-    expect(trainer.attack).toBe(TRAINER_COMBAT_STATS.attack);
-    expect(trainer.attack).toBe(boss.attack);
+    expect(trainer.attack).toBe(45);
+    expect(boss.attack).toBe(60);
+    expect(trainer.attack).toBeLessThan(boss.attack);
     expect(trainer.defense).toBe(boss.defense);
   });
 

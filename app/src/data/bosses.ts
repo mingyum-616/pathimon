@@ -45,7 +45,7 @@ const BOSS_MOVES: BossData['movePool'] = BOSS_ATTACK_MOVE_IDS;
 
 export const LATE_GAME_BOSS_IDS: string[] = ['prof_p', 'prof_s', 'prof_k', 'prof_w'];
 
-// 보스·트레이너는 스탯과 기술 위력을 공유하고 트레이너만 HP를 1/4로 줄인다(state/factory.ts).
+// 보스·트레이너는 기술 풀과 방어력을 공유하되, 트레이너는 공격력이 더 낮고 HP를 1/4로 줄인다(state/factory.ts).
 // v2 테스트 결과 공격력 136은 초반부터 과도해, 기술 위력은 유지하고 공격력을 낮췄다.
 // 40에서는 ×2 처치를 맞아도 최대 체력의 30% 남짓이라 예고를 무시하고 밀어붙여도 버텨졌다.
 // 60으로 올려 ×2 한 방의 무게를 키운다. 교체 판단이 실제로 손해를 막는 선택이 되게 한다.
