@@ -1,7 +1,13 @@
+import { getAudioMuted, onAudioMutedChange } from './audioSettings';
+
 const PREFETCH_SELECTOR = 'link[data-pathimon-bgm-prefetch]';
 
 let battleBgm: HTMLAudioElement | undefined;
 let currentPath = '';
+
+onAudioMutedChange((muted) => {
+  if (battleBgm) battleBgm.muted = muted;
+});
 
 function audioElement(): HTMLAudioElement | undefined {
   if (battleBgm) return battleBgm;
@@ -10,6 +16,7 @@ function audioElement(): HTMLAudioElement | undefined {
   battleBgm = new Audio();
   battleBgm.loop = true;
   battleBgm.preload = 'auto';
+  battleBgm.muted = getAudioMuted();
   return battleBgm;
 }
 
@@ -18,6 +25,7 @@ export async function playHtmlBattleBgm(path: string, volume = 0.35): Promise<vo
   if (!audio) return;
 
   audio.volume = volume;
+  audio.muted = getAudioMuted();
   if (currentPath !== path) {
     audio.pause();
     audio.src = path;

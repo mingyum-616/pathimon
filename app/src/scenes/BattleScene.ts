@@ -6,9 +6,10 @@ import {
 } from '../audio/htmlBgm';
 import {
   activateBossPhaseTwo,
+  beginCaptureQuiz,
   bossPhaseTwoDialogue,
   cancelPendingCapture,
-  resolveCapsuleAction,
+  resolveCaptureQuizAnswer,
   resolveCaptureRelease,
   resolveForcedSwitchMonster,
   resolvePassEncounter,
@@ -17,6 +18,8 @@ import {
 } from '../battle/turn';
 import { createBossRosterIds } from '../data/bosses';
 import { CAPSULE_LABELS, CAPSULE_ORDER } from '../data/capsules';
+import { MONSTERS } from '../data/monsters';
+import { createCaptureQuiz, type CaptureQuiz } from '../game/learning';
 import { advanceFromShop, createInitialRunState, encounterKindForFloor, enterBattle } from '../state/runState';
 import type { CapsuleId, HitEffectiveness, MoveId, RunState, RuntimeMonster } from '../types/game';
 import { COLORS, APP_WIDTH, APP_HEIGHT } from '../game/constants';
@@ -74,7 +77,7 @@ interface BattleSceneData {
   state?: RunState;
 }
 
-type BattleViewMode = 'command' | 'moves' | 'dex' | 'party' | 'status' | 'capsules';
+type BattleViewMode = 'command' | 'moves' | 'dex' | 'party' | 'status' | 'capsules' | 'captureQuiz';
 type BattleMessageStage = 'preparation' | 'combat' | 'status' | 'dialogue';
 type DexTab = 'moves' | 'effectiveness';
 type StatusTab = 'profile' | 'moves';
@@ -122,6 +125,9 @@ export class BattleScene extends Phaser.Scene {
   private bossDialogueVisibleCharacters = 0;
   private bossDialogueText?: Phaser.GameObjects.Text;
   private floorClearPage = 0;
+  private captureQuiz?: CaptureQuiz;
+  private captureQuizCursor = 0;
+  private showFirstTrainerGuide = false;
 
   constructor() {
     super('BattleScene');
@@ -156,6 +162,9 @@ export class BattleScene extends Phaser.Scene {
     this.bossDialogueVisibleCharacters = 0;
     this.bossDialogueText = undefined;
     this.floorClearPage = 0;
+    this.captureQuiz = undefined;
+    this.captureQuizCursor = 0;
+    this.showFirstTrainerGuide = this.state.floor === 5 && this.state.encounterKind === 'trainer';
   }
 
   preload(): void {
@@ -209,6 +218,12 @@ export class BattleScene extends Phaser.Scene {
     CAPSULE_ORDER.map(capsuleIconPath).forEach((path) => this.queueImage(path));
     pathimonTypeIconAssetPaths().forEach((path) => this.queueImage(path));
     this.queueImage(lockedMoveOverlayPath());
+    if (!this.textures.exists('battle_stats')) {
+      this.load.spritesheet('battle_stats', 'images/effects/battle_stats.png', {
+        frameWidth: 32,
+        frameHeight: 32,
+      });
+    }
 
     Object.values(battleSfxAssetPaths()).forEach((path) => this.queueAudio(path));
 
@@ -342,7 +357,11 @@ export class BattleScene extends Phaser.Scene {
     this.drawUnitPanel(unitLayout.player, player, 'player');
     this.drawBottomWindow(player, enemy);
     this.drawFloorBadge();
-    if (this.battleMessageStage === 'preparation') {
+    if (
+      this.battleMessageStage === 'preparation'
+      && this.viewMode !== 'captureQuiz'
+      && !this.showFirstTrainerGuide
+    ) {
       this.drawMobileOverlay();
     }
   }
@@ -625,6 +644,10 @@ export class BattleScene extends Phaser.Scene {
 
     if (this.battleMessageStage !== 'preparation') {
       this.drawBattleMessageView();
+    } else if (this.showFirstTrainerGuide) {
+      this.drawFirstTrainerGuide();
+    } else if (this.viewMode === 'captureQuiz') {
+      this.drawCaptureQuizView(enemy);
     } else if (this.state.phase === 'forcedSwitch') {
       this.drawPartyView();
     } else if (this.state.phase === 'releaseCapture') {
@@ -644,6 +667,51 @@ export class BattleScene extends Phaser.Scene {
     } else {
       this.drawPartyView();
     }
+  }
+
+  private drawFirstTrainerGuide(): void {
+    addLabel(this, 34, 408, '교체 안내', 23).setColor('#72d6ff');
+    addBoxLabel(this, 36, 448, '예고된 처치의 피해 배율이 낮은 패시몬으로 교체하세요.', {
+      width: 690,
+      height: 28,
+      size: 18,
+      minSize: 14,
+      maxLines: 1,
+    });
+    addBoxLabel(this, 36, 484, '도감의 상성표에서 현재 예고와 파티 상성을 확인할 수 있습니다.', {
+      width: 690,
+      height: 28,
+      size: 16,
+      minSize: 12,
+      maxLines: 1,
+    }).setAlpha(0.88);
+    this.drawMenuButton(806, 468, 150, 46, '확인', () => this.dismissFirstTrainerGuide(), true);
+  }
+
+  private dismissFirstTrainerGuide(): void {
+    this.showFirstTrainerGuide = false;
+    this.render();
+  }
+
+  private drawCaptureQuizView(enemy: RuntimeMonster): void {
+    const quiz = this.captureQuiz;
+    addLabel(this, 34, 406, `${enemy.name}이 질문을 던진다...`, 22).setColor('#72d6ff');
+    addBoxLabel(this, 36, 446, quiz?.statement ?? '질문을 불러오는 중입니다.', {
+      width: 670,
+      height: 72,
+      size: 18,
+      minSize: 13,
+      maxLines: 3,
+    }).setLineSpacing(5);
+    addBoxLabel(this, 36, 524, '이 패시몬에 대한 올바른 설명일까?', {
+      width: 470,
+      height: 22,
+      size: 14,
+      minSize: 11,
+      maxLines: 1,
+    }).setAlpha(0.78);
+    this.drawMenuButton(746, 448, 92, 70, 'O', () => this.handleCaptureQuizAnswer(true), this.captureQuizCursor === 0);
+    this.drawMenuButton(856, 448, 92, 70, 'X', () => this.handleCaptureQuizAnswer(false), this.captureQuizCursor === 1);
   }
 
   private drawCommandView(player: RuntimeMonster, enemy: RuntimeMonster): void {
@@ -890,7 +958,7 @@ export class BattleScene extends Phaser.Scene {
     addBoxLabel(this, 36, 482, this.notice || `${player.name}은 캡슐을 준비했다.`, { width: 560, height: 48, size: 15, minSize: 11, maxLines: 2 })
       .setAlpha(0.84);
 
-    const panelX = 642;
+    const panelX = 602;
     const panelY = 92;
     const rowX = panelX + 58;
     const rowY = panelY + 58;
@@ -1275,6 +1343,7 @@ export class BattleScene extends Phaser.Scene {
     const playerDefeated = Boolean(previousPlayer && playerDirectDamage >= previousPlayer.hp);
     const playerHitKind = nextState.lastPlayerHitEffectiveness;
     const enemyHitKind = nextState.lastEnemyHitEffectiveness;
+    const playAttackRankUp = Boolean(nextState.battleStatUpCue);
 
     if (!enemyTookDamage && !playerTookDamage && !enemyDefeated && !playerDefeated) {
       this.isAnimating = true;
@@ -1282,6 +1351,9 @@ export class BattleScene extends Phaser.Scene {
         this.playHitEffect('player', 'none', false);
       } else if (playerHitKind === 'none') {
         this.playHitEffect('enemy', 'none', false);
+      } else if (playAttackRankUp) {
+        this.playAttackRankUpEffect();
+        nextState.battleStatUpCue = undefined;
       } else {
         this.playSfx(battleSfxAssetPaths().statUp, 0.25);
       }
@@ -1305,9 +1377,35 @@ export class BattleScene extends Phaser.Scene {
       finishDelay = Math.max(finishDelay, playerDefeated ? 980 : 560);
     }
 
+    if (playAttackRankUp && !playerDefeated) {
+      this.time.delayedCall(playerTookDamage ? 560 : 120, () => this.playAttackRankUpEffect());
+      nextState.battleStatUpCue = undefined;
+      finishDelay = Math.max(finishDelay, playerTookDamage ? 940 : 520);
+    }
+
     this.time.delayedCall(finishDelay, () => {
       this.isAnimating = false;
       onComplete();
+    });
+  }
+
+  private playAttackRankUpEffect(): void {
+    const layout = battleSpriteLayouts().player;
+    this.playSfx(battleSfxAssetPaths().statUp, 0.42);
+    [-28, 0, 28].forEach((offset, index) => {
+      const arrow = this.add.sprite(layout.x + offset, layout.y - 112, 'battle_stats', 2)
+        .setDepth(BATTLE_EFFECT_DEPTH + 8)
+        .setScale(1.8)
+        .setAlpha(0);
+      this.tweens.add({
+        targets: arrow,
+        alpha: { from: 0, to: 1 },
+        y: arrow.y - 52,
+        duration: 520,
+        delay: index * 70,
+        ease: 'Cubic.easeOut',
+        onComplete: () => arrow.destroy(),
+      });
     });
   }
 
@@ -1953,6 +2051,17 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
+    if (this.showFirstTrainerGuide) {
+      return;
+    }
+
+    if (this.viewMode === 'captureQuiz') {
+      if (direction === 'left') this.captureQuizCursor = 0;
+      if (direction === 'right') this.captureQuizCursor = 1;
+      this.render();
+      return;
+    }
+
     if (this.viewMode === 'status') {
       if (this.statusTab === 'moves' && (direction === 'up' || direction === 'down')) {
         this.moveStatusMoveCursor(direction);
@@ -2070,6 +2179,16 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
+    if (this.showFirstTrainerGuide) {
+      this.dismissFirstTrainerGuide();
+      return;
+    }
+
+    if (this.viewMode === 'captureQuiz') {
+      this.handleCaptureQuizAnswer(this.captureQuizCursor === 0);
+      return;
+    }
+
     if (this.state.phase === 'floorClear') {
       this.advanceFloorClearPage();
       return;
@@ -2127,6 +2246,10 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
 
+    if (this.showFirstTrainerGuide || this.viewMode === 'captureQuiz') {
+      return;
+    }
+
     if (this.viewMode === 'status') {
       this.viewMode = 'party';
       this.statusTab = 'profile';
@@ -2172,10 +2295,75 @@ export class BattleScene extends Phaser.Scene {
 
   private handleCapsuleThrow(capsuleId: CapsuleId): void {
     const enemy = this.state.enemy;
-    this.state = resolveCapsuleAction(this.state, capsuleId, 0);
-    this.notice = enemy?.isTrainer ? '사람 전투에서는 캡슐을 던질 수 없습니다.' : this.state.lastLog;
-    const blocked = this.state.phase === 'battle' && (this.state.lastLog.includes('타입') || this.state.lastLog.includes('없습니다'));
-    this.viewMode = blocked ? 'capsules' : this.state.phase === 'releaseCapture' ? 'party' : 'command';
+    const quizState = beginCaptureQuiz(this.state, capsuleId);
+    this.state = quizState;
+    this.notice = enemy?.isTrainer ? '사람 전투에서는 캡슐을 던질 수 없습니다.' : quizState.lastLog;
+    if (!enemy || quizState.pendingCaptureCapsuleId !== capsuleId) {
+      this.viewMode = 'capsules';
+      this.render();
+      return;
+    }
+
+    this.captureQuiz = createCaptureQuiz(enemy, MONSTERS, Math.random);
+    this.captureQuizCursor = 0;
+    this.isAnimating = true;
+    this.playCapsuleThrow(capsuleId, () => {
+      this.isAnimating = false;
+      this.viewMode = 'captureQuiz';
+      this.render();
+    });
+  }
+
+  private playCapsuleThrow(capsuleId: CapsuleId, onComplete: () => void): void {
+    const layouts = battleSpriteLayouts();
+    const startX = layouts.player.x + 36;
+    const startY = layouts.player.y - 74;
+    const endX = layouts.enemy.x;
+    const endY = layouts.enemy.y - 116;
+    const capsule = this.add.image(startX, startY, capsuleIconPath(capsuleId))
+      .setDepth(BATTLE_EFFECT_DEPTH + 12)
+      .setScale(0.72);
+
+    this.tweens.add({
+      targets: capsule,
+      x: (startX + endX) / 2,
+      y: Math.min(startY, endY) - 118,
+      angle: 420,
+      duration: 330,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: capsule,
+          x: endX,
+          y: endY,
+          angle: 720,
+          duration: 300,
+          ease: 'Sine.easeIn',
+          onComplete: () => {
+            capsule.destroy();
+            onComplete();
+          },
+        });
+      },
+    });
+  }
+
+  private handleCaptureQuizAnswer(answer: boolean): void {
+    if (!this.captureQuiz || this.isAnimating) return;
+
+    const correct = answer === this.captureQuiz.answer;
+    const previousState = this.state;
+    this.state = resolveCaptureQuizAnswer(this.state, correct, Math.random());
+    this.notice = this.state.battleResultLog ?? this.state.lastLog;
+    this.captureQuiz = undefined;
+
+    if (!correct) {
+      this.viewMode = this.state.phase === 'forcedSwitch' ? 'party' : 'command';
+      this.playBattleResolutionCue(previousState, this.state, () => this.showCombatMessage());
+      return;
+    }
+
+    this.viewMode = this.state.phase === 'releaseCapture' ? 'party' : 'command';
     if (this.state.phase === 'releaseCapture') {
       this.openPartyView();
     }

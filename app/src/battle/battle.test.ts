@@ -955,6 +955,15 @@ describe('battle engine', () => {
     expect(result.battleActionLog).toContain('회피몬');
     expect(result.battleActionLog).toContain(`면역챔피언의 ${MOVES['m_rx_알벤다졸'].name}!`);
     expect(result.battleActionLog).not.toContain(`면역챔피언의 ${MOVES.m_interferon.name}!`);
+    expect(result.party[1].effects).toContainEqual({
+      kind: 'buff',
+      stat: 'attack',
+      pct: 50,
+      rank: 1,
+      turns: 99,
+    });
+    expect(result.battleStatUpCue).toEqual({ stat: 'attack', target: 'player' });
+    expect(result.battleActionLog).toContain('공격 +1');
   });
 
   it('uses two telegraphed boss moves in phase two and both hit the final active pathimon', () => {

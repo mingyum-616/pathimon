@@ -6,6 +6,15 @@ export type CaptureResult =
   | { kind: 'captured'; capsules: number; chance: number }
   | { kind: 'missed'; capsules: number; chance: number };
 
+export function captureChance(enemy: RuntimeMonster): number {
+  const hpLoss = (enemy.maxHp - enemy.hp) / enemy.maxHp;
+  return Math.min(0.95, enemy.captureRate + hpLoss * 0.4);
+}
+
+export function rollsCapture(enemy: RuntimeMonster, roll: number): boolean {
+  return roll <= captureChance(enemy);
+}
+
 export function tryCapture(enemy: RuntimeMonster, capsules: number, roll: number): CaptureResult {
   if (enemy.isBoss || enemy.isTrainer) {
     return { kind: 'blocked', capsules };
@@ -15,8 +24,7 @@ export function tryCapture(enemy: RuntimeMonster, capsules: number, roll: number
     return { kind: 'noCapsules', capsules };
   }
 
-  const hpLoss = (enemy.maxHp - enemy.hp) / enemy.maxHp;
-  const chance = Math.min(0.95, enemy.captureRate + hpLoss * 0.4);
+  const chance = captureChance(enemy);
   const remainingCapsules = capsules - 1;
 
   if (roll <= chance) {

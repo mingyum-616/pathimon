@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { queueIntroBgm } from '../audio/introBgm';
 import { APP_HEIGHT, APP_WIDTH } from '../game/constants';
 import {
   createInitialPathimonScreensaverItems,
@@ -19,6 +20,10 @@ export class BgmPreloadScene extends Phaser.Scene {
 
   init(): void {
     this.registry.set('battleBgmPreloadStarted', true);
+  }
+
+  preload(): void {
+    queueIntroBgm(this);
   }
 
   create(): void {

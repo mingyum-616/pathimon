@@ -30,6 +30,48 @@ export function randomLearningPoint(
 
 type LearningMonster = Pick<RuntimeMonster, 'profileMemo' | 'movePointMap'> | undefined;
 
+interface CaptureQuizMonster {
+  id?: string;
+  name: string;
+  profileMemo?: string[];
+  templateId?: string;
+}
+
+export interface CaptureQuiz {
+  answer: boolean;
+  statement: string;
+}
+
+function quizStatement(text: string): string {
+  return sanitizeLearningText(text)
+    .replace(/^L\d+\s*(?:\[[^\]]+\])?\s*/, '')
+    .trim();
+}
+
+export function createCaptureQuiz(
+  target: CaptureQuizMonster,
+  catalog: CaptureQuizMonster[],
+  random: () => number = Math.random,
+): CaptureQuiz {
+  const targetPoints = target.profileMemo?.filter((line) => quizStatement(line).length > 0) ?? [];
+  const targetId = target.templateId ?? target.id;
+  const decoys = catalog.filter((monster) => (
+    (monster.templateId ?? monster.id) !== targetId
+    && monster.profileMemo?.some((line) => quizStatement(line).length > 0)
+  ));
+  const useTarget = random() < 0.5 || decoys.length === 0;
+  const source = useTarget
+    ? target
+    : decoys[Math.min(decoys.length - 1, Math.floor(random() * decoys.length))];
+  const points = source.profileMemo?.filter((line) => quizStatement(line).length > 0) ?? targetPoints;
+  const point = points[Math.min(points.length - 1, Math.max(0, Math.floor(random() * points.length)))] ?? '';
+
+  return {
+    answer: useTarget,
+    statement: quizStatement(point) || `${target.name}은 현재 분류와 일치하는 특징을 가진다.`,
+  };
+}
+
 // 기술을 쓰면 그 기술에 묶인 학습포인트를 보여준다(맥락 연결). 매핑이 없으면 무작위로 폴백한다.
 export function contextualLearningPoint(
   monster: LearningMonster,

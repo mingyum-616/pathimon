@@ -217,6 +217,7 @@ export function enterBattle(state: RunState, enemyIndex?: number): RunState {
     enemy: null,
     encounterKind: encounterKindForFloor(state.floor),
     pendingCapture: undefined,
+    pendingCaptureCapsuleId: undefined,
     shopInventory: undefined,
     shopRefreshCount: 0,
     battleResultLog: undefined,
@@ -225,6 +226,7 @@ export function enterBattle(state: RunState, enemyIndex?: number): RunState {
     battleStatusDamage: undefined,
     lastEnemyHitEffectiveness: undefined,
     lastPlayerHitEffectiveness: undefined,
+    battleStatUpCue: undefined,
   };
 
   if (nextState.encounterKind === 'boss') {

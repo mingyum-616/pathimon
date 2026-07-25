@@ -1,4 +1,4 @@
-import { tryCapture } from './capture';
+import { captureChance, rollsCapture, tryCapture } from './capture';
 import { calculateDamage, randomDamageVariance, rollsCriticalHit, type DamageResult } from './damage';
 import { applyAttackTriggeredStatusDamage, applyEffects, tickEffects } from './effects';
 import { ABILITIES } from '../data/abilities';
@@ -75,8 +75,10 @@ function cloneState(state: RunState): RunState {
     party: state.party.map(cloneMonster),
     enemy: state.enemy ? cloneMonster(state.enemy) : null,
     pendingCapture: state.pendingCapture ? cloneMonster(state.pendingCapture) : undefined,
+    pendingCaptureCapsuleId: state.pendingCaptureCapsuleId,
     shopInventory: state.shopInventory?.map((item) => ({ ...item })),
     shopRefreshCount: state.shopRefreshCount,
+    battleStatUpCue: state.battleStatUpCue ? { ...state.battleStatUpCue } : undefined,
   };
 }
 
@@ -691,6 +693,7 @@ export function resolvePlayerMove(
   criticalRandom: CriticalRandomSource = noCriticalRandom,
 ): RunState {
   const nextState = cloneState(state);
+  nextState.battleStatUpCue = undefined;
   nextState.battleResultLog = undefined;
   nextState.battleActionLog = undefined;
   nextState.battleStatusLog = undefined;
@@ -827,6 +830,7 @@ export function resolveSwitchMonster(
   criticalRandom: CriticalRandomSource = noCriticalRandom,
 ): RunState {
   const nextState = cloneState(state);
+  nextState.battleStatUpCue = undefined;
   nextState.battleActionLog = undefined;
   nextState.battleStatusLog = undefined;
   nextState.battleStatusDamage = undefined;
@@ -858,10 +862,131 @@ export function resolveSwitchMonster(
   }
 
   const enemyLog = resolveEnemyTurn(target, enemy, variance, nextState.party, targetIndex, criticalRandom);
-  const switchLog = previousMultiplier > targetMultiplier
+  let switchLog = previousMultiplier > targetMultiplier
     ? `${target.name}이 나왔다.\n교체 성공: 예상 피해 ×${previousMultiplier} → ×${targetMultiplier}로 감소!`
     : `${target.name}이 나왔다.`;
-  return finishBattleRound(nextState, target, enemy, switchLog, enemyLog, defaultLearningDetail(nextState));
+  const earnsSwitchRank = (
+    previousMultiplier > targetMultiplier
+    && targetMultiplier === 1
+    && enemyLog.hitEffectiveness === 'normal'
+    && target.hp > 0
+  );
+  if (earnsSwitchRank) {
+    switchLog += `\n${target.name}의 공격 +1!`;
+  }
+  const resolvedState = finishBattleRound(
+    nextState,
+    target,
+    enemy,
+    switchLog,
+    enemyLog,
+    defaultLearningDetail(nextState),
+  );
+  const resolvedTarget = resolvedState.party[resolvedState.activeIndex];
+  if (earnsSwitchRank && resolvedState.phase === 'battle' && resolvedTarget?.hp > 0) {
+    resolvedTarget.effects.push({
+      kind: 'buff',
+      stat: 'attack',
+      pct: 50,
+      rank: 1,
+      turns: 99,
+    });
+    resolvedState.battleStatUpCue = { stat: 'attack', target: 'player' };
+  }
+  return resolvedState;
+}
+
+function completeCapturedEnemy(nextState: RunState, enemy: RuntimeMonster): RunState {
+  const capturedData = MONSTERS.find((monster) => monster.id === enemy.templateId);
+  if (!capturedData) {
+    throw new Error(`Unknown captured monster: ${enemy.templateId}`);
+  }
+
+  const captured = createMonsterInstance(capturedData);
+  captured.signatureUnlocked = nextState.mode === 'learning';
+  if (nextState.party.length >= MAX_PARTY_SIZE) {
+    nextState.pendingCapture = captured;
+    nextState.phase = 'releaseCapture';
+    nextState.lastLog = `${enemy.name}을 포획했습니다. 놓아줄 패시몬을 선택하세요.`;
+    return nextState;
+  }
+
+  nextState.party.push(captured);
+  return setWinState(nextState, `${enemy.name}을 포획했습니다.`, undefined, pathimonMemoDetail(enemy));
+}
+
+export function beginCaptureQuiz(state: RunState, capsuleId: CapsuleId): RunState {
+  const nextState = cloneState(state);
+  const enemy = nextState.enemy;
+  nextState.pendingCaptureCapsuleId = undefined;
+  nextState.battleActionLog = undefined;
+  nextState.battleStatusLog = undefined;
+  nextState.battleStatusDamage = undefined;
+  nextState.battleStatUpCue = undefined;
+
+  if (!enemy || enemy.isTrainer) {
+    nextState.lastLog = '사람 전투에서는 캡슐을 던질 수 없습니다.';
+    return nextState;
+  }
+
+  if (!capsuleCanCatch(capsuleId, enemy)) {
+    nextState.lastLog = '패시몬 타입이 맞지 않습니다.';
+    return nextState;
+  }
+
+  const selectedCount = nextState.capsuleInventory[capsuleId] ?? 0;
+  if (nextState.mode !== 'learning' && selectedCount <= 0) {
+    nextState.lastLog = `${CAPSULE_LABELS[capsuleId]}이 없습니다.`;
+    return nextState;
+  }
+
+  if (nextState.mode !== 'learning') {
+    nextState.capsuleInventory[capsuleId] = selectedCount - 1;
+    nextState.capsules = totalCapsules(nextState.capsuleInventory);
+  }
+  nextState.pendingCaptureCapsuleId = capsuleId;
+  nextState.phase = 'battle';
+  nextState.lastLog = `${enemy.name}이 질문을 던진다...`;
+  return nextState;
+}
+
+export function resolveCaptureQuizAnswer(state: RunState, correct: boolean, roll = Math.random()): RunState {
+  const nextState = cloneState(state);
+  const enemy = nextState.enemy;
+  const capsuleId = nextState.pendingCaptureCapsuleId;
+  nextState.pendingCaptureCapsuleId = undefined;
+
+  if (!enemy || !capsuleId) {
+    nextState.phase = 'battle';
+    nextState.lastLog = '먼저 캡슐을 선택해야 합니다.';
+    return nextState;
+  }
+
+  if (correct) {
+    if (rollsCapture(enemy, roll)) {
+      return completeCapturedEnemy(nextState, enemy);
+    }
+
+    nextState.phase = 'battle';
+    nextState.lastLog = `${enemy.name}이 캡슐에서 빠져나왔다. 포획 확률은 ${Math.round(captureChance(enemy) * 100)}%였다.`;
+    return nextState;
+  }
+
+  const actor = nextState.party[nextState.activeIndex];
+  if (!actor) return nextState;
+
+  const damage = Math.ceil(actor.maxHp * 0.5);
+  markDamage(actor, damage);
+  actor.fainted = actor.hp <= 0;
+  nextState.phase = 'battle';
+  nextState.lastEnemyHitEffectiveness = 'normal';
+  nextState.lastPlayerHitEffectiveness = undefined;
+  nextState.battleActionLog = `${enemy.name}이 질문을 던졌다.\n오답이다! ${actor.name}은 최대 체력의 50% 피해를 입었다.`;
+  nextState.battleStatusLog = undefined;
+  nextState.battleStatusDamage = undefined;
+  nextState.lastLog = nextState.battleActionLog;
+
+  return actor.hp <= 0 ? setCollapsedState(nextState, actor) : nextState;
 }
 
 export function resolveCapsuleAction(state: RunState, rollOrCapsule: number | CapsuleId, maybeRoll?: number): RunState {
@@ -903,22 +1028,7 @@ export function resolveCapsuleAction(state: RunState, rollOrCapsule: number | Ca
   }
 
   if (result.kind === 'captured') {
-    const capturedData = MONSTERS.find((monster) => monster.id === enemy.templateId);
-    if (!capturedData) {
-      throw new Error(`Unknown captured monster: ${enemy.templateId}`);
-    }
-
-    const captured = createMonsterInstance(capturedData);
-    captured.signatureUnlocked = nextState.mode === 'learning';
-    if (nextState.party.length >= MAX_PARTY_SIZE) {
-      nextState.pendingCapture = captured;
-      nextState.phase = 'releaseCapture';
-      nextState.lastLog = `${enemy.name}을 포획했습니다. 놓아줄 패시몬을 선택하세요.`;
-      return nextState;
-    }
-
-    nextState.party.push(captured);
-    return setWinState(nextState, `${enemy.name}을 포획했습니다.`, undefined, pathimonMemoDetail(enemy));
+    return completeCapturedEnemy(nextState, enemy);
   }
 
   nextState.phase = 'battle';

@@ -389,6 +389,7 @@ export interface RunState {
   activeIndex: number;
   enemy: RuntimeMonster | null;
   pendingCapture?: RuntimeMonster;
+  pendingCaptureCapsuleId?: CapsuleId;
   encounterKind: EncounterKind;
   phase: BattlePhase;
   lastLog: string;
@@ -401,6 +402,10 @@ export interface RunState {
   };
   lastEnemyHitEffectiveness?: HitEffectiveness;
   lastPlayerHitEffectiveness?: HitEffectiveness;
+  battleStatUpCue?: {
+    stat: 'attack';
+    target: 'player';
+  };
   shopInventory?: ShopItem[];
   shopRefreshCount?: number;
 }

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { MonsterData, RunState } from '../types/game';
 import {
+  beginCaptureQuiz,
   cancelPendingCapture,
   resolveCapsuleAction,
+  resolveCaptureQuizAnswer,
   resolveCaptureRelease,
   resolveForcedSwitchMonster,
   resolvePassEncounter,
@@ -356,6 +358,48 @@ describe('run state loop', () => {
       ?.filter((line) => result.lastLog.includes(line)) ?? [];
     expect(displayedLearningPoints).toHaveLength(1);
     expect(result.lastLog).not.toContain('학습 피드백');
+  });
+
+  it('spends a capsule before the OX quiz and applies the original capture rate after a correct answer', () => {
+    const battle = enterBattle(createInitialRunState('challenge'));
+    if (!battle.enemy) throw new Error('enemy missing');
+    battle.enemy.captureRate = 0.4;
+
+    const quiz = beginCaptureQuiz(battle, 'universal');
+    const missed = resolveCaptureQuizAnswer(quiz, true, 0.8);
+
+    expect(quiz.capsuleInventory.universal).toBe(4);
+    expect(quiz.pendingCaptureCapsuleId).toBe('universal');
+    expect(missed.phase).toBe('battle');
+    expect(missed.party).toHaveLength(1);
+    expect(missed.lastLog).toContain('빠져나왔다');
+  });
+
+  it('captures after a correct answer when the capture roll succeeds', () => {
+    const battle = enterBattle(createInitialRunState('challenge'));
+    if (!battle.enemy) throw new Error('enemy missing');
+    battle.enemy.captureRate = 0.4;
+
+    const quiz = beginCaptureQuiz(battle, 'universal');
+    const captured = resolveCaptureQuizAnswer(quiz, true, 0.2);
+
+    expect(captured.phase).toBe('floorClear');
+    expect(captured.party).toHaveLength(2);
+  });
+
+  it('deals half max HP for a wrong answer and forces a switch when the pathimon faints', () => {
+    const battle = enterBattle(createInitialRunState('challenge'));
+    battle.party.push({ ...battle.party[0], templateId: 'bench', name: '대기몬' });
+
+    const firstQuiz = beginCaptureQuiz(battle, 'universal');
+    const firstWrong = resolveCaptureQuizAnswer(firstQuiz, false, 0);
+    const secondQuiz = beginCaptureQuiz(firstWrong, 'universal');
+    const secondWrong = resolveCaptureQuizAnswer(secondQuiz, false, 0);
+
+    expect(firstWrong.party[0].hp).toBe(Math.floor(firstWrong.party[0].maxHp / 2));
+    expect(secondWrong.party[0].hp).toBe(0);
+    expect(secondWrong.phase).toBe('forcedSwitch');
+    expect(secondWrong.lastLog).toContain('쓰러졌');
   });
 
   it('blocks capture before spending when the selected capsule does not match the pathogen tag', () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RuntimeMonster } from '../types/game';
 import {
   conciseLearningFeedback,
+  createCaptureQuiz,
   contextualLearningPoint,
   leftoverLearningPoints,
   randomLearningPoint,
@@ -95,5 +96,29 @@ describe('learning points', () => {
     expect(feedback.length).toBeLessThanOrEqual(71);
     expect(feedback.endsWith('…')).toBe(true);
     expect(feedback).not.toContain('**');
+  });
+
+  it('builds an O quiz from the encountered pathimon learning text', () => {
+    const target = monsterWithLearningPoints(['L1 [감별점] 대상 패시몬의 실제 특징이다.']);
+    const decoy = monsterWithLearningPoints(['L1 [감별점] 다른 패시몬의 특징이다.']);
+    decoy.templateId = 'decoy';
+    decoy.name = '다른몬';
+
+    expect(createCaptureQuiz(target, [target, decoy], () => 0)).toEqual({
+      answer: true,
+      statement: '대상 패시몬의 실제 특징이다.',
+    });
+  });
+
+  it('builds an X quiz from another pathimon learning text', () => {
+    const target = monsterWithLearningPoints(['L1 [감별점] 대상 패시몬의 실제 특징이다.']);
+    const decoy = monsterWithLearningPoints(['L2 [기전] 다른 패시몬의 특징이다.']);
+    decoy.templateId = 'decoy';
+    decoy.name = '다른몬';
+
+    expect(createCaptureQuiz(target, [target, decoy], () => 0.9)).toEqual({
+      answer: false,
+      statement: '다른 패시몬의 특징이다.',
+    });
   });
 });

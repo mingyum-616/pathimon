@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import bgmPreloadSceneSource from './BgmPreloadScene.ts?raw';
 
 describe('BgmPreloadScene', () => {
+  it('loads the intro BGM while the story is being read', () => {
+    expect(bgmPreloadSceneSource).toContain('queueIntroBgm(this)');
+  });
+
   it('keeps the story screensaver without decoding every battle BGM', () => {
     expect(bgmPreloadSceneSource).toContain("super('BgmPreloadScene')");
     expect(bgmPreloadSceneSource).toContain('startPathimonScreensaver');

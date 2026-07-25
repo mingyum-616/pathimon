@@ -10,6 +10,7 @@ describe('StoryScene flow', () => {
     expect(storySceneSource).toContain("if (this.registry.get('battleBgmPreloadComplete'))");
     expect(storySceneSource).toContain('stopPathimonScreensaver');
     expect(storySceneSource).toContain("this.scene.start('DisclaimerScene')");
+    expect(storySceneSource).not.toContain("delayedCall(2000");
     expect(storySceneSource).not.toContain("this.scene.start('GameGuideScene')");
   });
 

@@ -1,19 +1,19 @@
 import Phaser from 'phaser';
-import { queueIntroBgm } from '../audio/introBgm';
 import { APP_HEIGHT, APP_WIDTH, COLORS } from '../game/constants';
 import { addLabel, drawPanel } from '../ui/draw';
 import { disclaimerContent, type DisclaimerBlinkEffect } from '../ui/disclaimerUi';
 
 export class DisclaimerScene extends Phaser.Scene {
+  private advancing = false;
+  private skipEnabledAt = 0;
+
   constructor() {
     super('DisclaimerScene');
   }
 
-  preload(): void {
-    queueIntroBgm(this);
-  }
-
   create(): void {
+    this.advancing = false;
+    this.skipEnabledAt = this.time.now + 800;
     const content = disclaimerContent();
 
     this.add.rectangle(0, 0, APP_WIDTH, APP_HEIGHT, 0x0e1118).setOrigin(0);
@@ -29,7 +29,20 @@ export class DisclaimerScene extends Phaser.Scene {
         .setAlpha(0.92);
     });
 
-    this.playBlinkOut(content.blinkEffect, () => this.scene.start('PostDisclaimerStoryScene'));
+    this.input.on('pointerdown', this.skipBlinkOut, this);
+    this.input.keyboard?.on('keydown', this.skipBlinkOut, this);
+    this.playBlinkOut(content.blinkEffect, () => this.skipBlinkOut());
+  }
+
+  private skipBlinkOut(): void {
+    if (this.advancing || this.time.now < this.skipEnabledAt) return;
+
+    this.advancing = true;
+    this.input.off('pointerdown', this.skipBlinkOut, this);
+    this.input.keyboard?.off('keydown', this.skipBlinkOut, this);
+    this.time.removeAllEvents();
+    this.tweens.killAll();
+    this.scene.start('PostDisclaimerStoryScene');
   }
 
   private playBlinkOut(effect: DisclaimerBlinkEffect, onComplete: () => void): void {
