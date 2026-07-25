@@ -180,7 +180,7 @@ function partyProgressText(state: RunState): string {
 
 function victoryProgressDetail(state: RunState, reward: number): string {
   if (state.mode === 'learning') {
-    return `학습모드 보상: 다음 층 시작 전 전원 회복 · ${partyProgressText(state)}`;
+    return `학습모드 보상: 적 전투 종료 후 전원 회복 · ${partyProgressText(state)}`;
   }
 
   return `승리 보상 +${reward}원 · ${partyProgressText(state)}`;
@@ -205,17 +205,23 @@ function floorClearLog(state: RunState, message: string, detail?: string): strin
 }
 
 function setWinState(state: RunState, message: string, _learningDetail?: string, resultDetail?: string): RunState {
-  const shouldOpenShop = state.mode === 'challenge' && (state.encounterKind === 'trainer' || state.encounterKind === 'boss');
+  const isHumanEncounter = state.encounterKind === 'trainer' || state.encounterKind === 'boss';
+  const shouldOpenShop = state.mode === 'challenge' && isHumanEncounter;
+  const shouldHealLearningParty = state.mode === 'learning' && isHumanEncounter;
   const reward = shouldOpenShop ? WIN_REWARD : 0;
   const detail = resultDetail
     ? `${resultDetail}\n${partyProgressText(state)}`
     : victoryProgressDetail(state, reward);
   const battleResultLog = floorClearLog(state, message, detail);
+  const finishedParty = creditBattleParticipation(state.party).map(clearBattleOnlyState);
+  const party = shouldHealLearningParty
+    ? finishedParty.map((monster) => ({ ...monster, hp: monster.maxHp, fainted: false }))
+    : finishedParty;
 
   return {
     ...state,
     money: state.money + reward,
-    party: creditBattleParticipation(state.party).map(clearBattleOnlyState),
+    party,
     phase: shouldOpenShop ? 'shop' : 'floorClear',
     lastLog: shouldOpenShop ? maintenanceVictoryLog(state, reward) : battleResultLog,
     battleResultLog,

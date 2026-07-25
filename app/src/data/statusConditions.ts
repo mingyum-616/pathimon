@@ -46,8 +46,8 @@ export const STATUS_CONDITIONS: Record<StatusConditionId, StatusConditionData> =
   anemia: { id: 'anemia', label: '빈혈', effect: '매 턴 최대 체력 1% 피해' },
   immune_abnormal: { id: 'immune_abnormal', label: '면역 이상', effect: '4스택마다 방어 특성 1개 무력화' },
   necrosis: { id: 'necrosis', label: '괴사', effect: '최대 체력 상한 2.5% 감소' },
-  blindness: { id: 'blindness', label: '시력 이상', effect: '명중률 12.5% 감소' },
-  hearing_abnormal: { id: 'hearing_abnormal', label: '청력 이상', effect: '명중률 7.5% 감소' },
+  blindness: { id: 'blindness', label: '시력 이상', effect: '명중률 10% 감소' },
+  hearing_abnormal: { id: 'hearing_abnormal', label: '청력 이상', effect: '명중률 6% 감소' },
   pain: { id: 'pain', label: '통증', effect: '방어력 5% 감소' },
   itching: { id: 'itching', label: '가려움', effect: '행동 실패 확률 2.5% 증가' },
   jaundice: { id: 'jaundice', label: '황달', effect: '체력 회복량 7.5% 감소' },
@@ -100,9 +100,9 @@ export function statusConditionEffectText(id: StatusConditionId, stacks = 1): st
     case 'necrosis':
       return `최대 체력 상한 ${formatPercent(Math.min(99, count * 2.5))}% 감소`;
     case 'blindness':
-      return `명중률 ${cappedPercent(count * 12.5)}% 감소`;
+      return `명중률 ${cappedPercent(count * 10)}% 감소`;
     case 'hearing_abnormal':
-      return `명중률 ${cappedPercent(count * 7.5)}% 감소`;
+      return `명중률 ${cappedPercent(count * 6)}% 감소`;
     case 'pain':
       return `방어력 ${cappedPercent(count * 5, 90)}% 감소`;
     case 'itching':
@@ -219,7 +219,7 @@ export function actionFailureLabel(monster: RuntimeMonster): string {
 export function accuracyMultiplier(monster: RuntimeMonster): number {
   return Math.max(
     0,
-    1 - statusConditionStacks(monster, 'blindness') * 0.125 - statusConditionStacks(monster, 'hearing_abnormal') * 0.075,
+    1 - statusConditionStacks(monster, 'blindness') * 0.10 - statusConditionStacks(monster, 'hearing_abnormal') * 0.06,
   );
 }
 

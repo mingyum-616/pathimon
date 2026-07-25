@@ -262,19 +262,14 @@ describe('run state loop', () => {
     expect([...runRosterIds].sort()).toEqual([...openingRouteIds].sort());
   });
 
-  it('heals the party at battle start only in learning mode', () => {
+  it('preserves party hp when a new encounter starts in either mode', () => {
     const learning = createInitialRunState('learning');
     learning.party[0].hp = 1;
-    learning.party[0].effects.push({ kind: 'dot', power: 4, turns: 2 });
-    learning.party[0].stunned = true;
-    learning.party[0].fainted = true;
 
     const learningBattle = enterBattle(learning);
 
     expect(learningBattle.mode).toBe('learning');
-    expect(learningBattle.party[0].hp).toBe(learningBattle.party[0].maxHp);
-    expect(learningBattle.party[0].effects).toEqual([]);
-    expect(learningBattle.party[0].fainted).toBe(false);
+    expect(learningBattle.party[0].hp).toBe(1);
 
     const challenge = createInitialRunState('challenge');
     challenge.party[0].hp = 1;
@@ -362,14 +357,16 @@ describe('run state loop', () => {
     // 패시몬끼리는 싸우지 않는다. 전투는 트레이너·보스와만 성립하므로 5층(트레이너)에서 확인한다.
     const battle = enterBattle({ ...createInitialRunState('learning'), floor: 5 });
     if (!battle.enemy) throw new Error('enemy missing');
+    battle.party[0].hp = 1;
     battle.enemy.hp = 1;
 
     const result = resolvePlayerMove(battle, 'cholera_toxin', 1);
 
     expect(result.phase).toBe('floorClear');
+    expect(result.party[0].hp).toBe(result.party[0].maxHp);
     expect(result.lastLog).toContain(`${battle.floor}층 클리어`);
     expect(result.lastLog).not.toContain('학습 피드백');
-    expect(result.lastLog).toContain('다음 층 시작 전 전원 회복');
+    expect(result.lastLog).toContain('적 전투 종료 후 전원 회복');
     expect(result.lastLog).toContain('파티 1/6');
   });
 
@@ -439,6 +436,25 @@ describe('run state loop', () => {
     expect(wrong.party[0].hp).toBe(actor.maxHp - expectedDamage);
     expect(wrong.phase).toBe('battle');
     expect(wrong.lastLog).toContain(`최대 체력의 ${label} 피해`);
+  });
+
+  it('keeps learning-mode capture quiz damage after capture and on the next wild floor', () => {
+    const battle = enterBattle(createInitialRunState('learning'));
+    const actor = battle.party[0];
+    const quiz = beginCaptureQuiz(battle, 'universal');
+    const wrong = resolveCaptureQuizAnswer(quiz, false);
+    const damagedHp = wrong.party[0].hp;
+
+    expect(damagedHp).toBeLessThan(actor.maxHp);
+
+    const retryQuiz = beginCaptureQuiz(wrong, 'universal');
+    const captured = resolveCaptureQuizAnswer(retryQuiz, true);
+    const nextBattle = advanceFromShop(captured);
+
+    expect(captured.phase).toBe('floorClear');
+    expect(captured.party[0].hp).toBe(damagedHp);
+    expect(nextBattle.floor).toBe(2);
+    expect(nextBattle.party[0].hp).toBe(damagedHp);
   });
 
   it('blocks capture before spending when the selected capsule does not match the pathogen tag', () => {
@@ -1047,7 +1063,7 @@ describe('run state loop', () => {
 
     expect(result.party[0].templateId).toBe('trichinella-adult');
     expect(result.party[0].name).toBe('Trichinella spiralis-성충');
-    expect(result.party[0].hp).toBe(12);
+    expect(result.party[0].hp).toBe(24);
     expect(result.party[0].moveSlots?.[0]).toBe('ascaris_obstruction');
     expect(result.party[0].signatureUnlocked).toBe(false);
     expect(result.lastLog).toContain('진화');
@@ -1064,6 +1080,7 @@ describe('run state loop', () => {
 
     expect(result.party[0].templateId).toBe('ascaris_larva');
     expect(result.party[0].name).toContain('유충');
+    expect(result.party[0].hp).toBe(result.party[0].maxHp);
     expect(result.party[0].attack).toBeGreaterThan(state.party[0].attack);
     expect(result.lastLog).toContain('진화');
   });
@@ -1080,7 +1097,9 @@ describe('run state loop', () => {
 
     expect(result.money).toBe(0);
     expect(result.party[0].templateId).toBe('ascaris_larva');
-    expect(result.party[0].hp).toBe(7);
+    expect(result.party[0].hp).toBe(
+      Math.round(result.party[0].maxHp * (7 / state.party[0].maxHp)),
+    );
     expect(result.party[0].attack).toBeGreaterThan(state.party[0].attack);
     expect(result.lastLog).toContain('진화');
     // 다음 단계도 다시 한 번 싸워야 한다.

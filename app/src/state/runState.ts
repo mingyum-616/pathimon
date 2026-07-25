@@ -55,8 +55,8 @@ function healMonster(monster: RuntimeMonster): RuntimeMonster {
   };
 }
 
-function prepareMonsterForBattle(monster: RuntimeMonster, mode: RunMode): RuntimeMonster {
-  const prepared = mode === 'learning' ? healMonster(monster) : cloneMonster(monster);
+function prepareMonsterForBattle(monster: RuntimeMonster): RuntimeMonster {
+  const prepared = cloneMonster(monster);
   prepared.usedSignatureMoveIds = [];
   prepared.enteredCurrentBattle = false;
   return prepared;
@@ -84,7 +84,10 @@ export function evolutionTargetForMonster(
 
 function evolveMonster(monster: RuntimeMonster, evolvedData: MonsterData, mode: RunMode): RuntimeMonster {
   const evolved = createMonsterInstance(evolvedData);
-  evolved.hp = Math.min(evolved.maxHp, monster.hp);
+  const hpRatio = monster.maxHp > 0 ? monster.hp / monster.maxHp : 0;
+  evolved.hp = monster.hp <= 0
+    ? 0
+    : Math.max(1, Math.min(evolved.maxHp, Math.round(evolved.maxHp * hpRatio)));
   evolved.effects = monster.effects.map((effect) => ({ ...effect }));
   evolved.statusConditions = monster.statusConditions ? { ...monster.statusConditions } : {};
   evolved.symptoms = monster.symptoms ? [...monster.symptoms] : [];
@@ -215,7 +218,7 @@ export function enterBattle(state: RunState, enemyIndex?: number): RunState {
     capsuleInventory: cloneCapsuleInventory(state.capsuleInventory),
     wildRosterIds: state.wildRosterIds ? [...state.wildRosterIds] : undefined,
     bossRosterIds: state.bossRosterIds ? [...state.bossRosterIds] : undefined,
-    party: state.party.map((monster) => prepareMonsterForBattle(monster, state.mode)),
+    party: state.party.map(prepareMonsterForBattle),
     enemy: null,
     encounterKind: encounterKindForFloor(state.floor),
     pendingCapture: undefined,
@@ -271,7 +274,7 @@ export function advanceFromShop(state: RunState): RunState {
     encounterKind: 'wild',
     pendingCapture: undefined,
     phase: 'story',
-    lastLog: state.mode === 'learning' ? '학습모드: 다음 층 전투를 위해 모두 회복했습니다.' : '다음 층 전투를 시작합니다.',
+    lastLog: '다음 층 전투를 시작합니다.',
     battleResultLog: undefined,
     battleActionLog: undefined,
     battleStatusLog: undefined,
