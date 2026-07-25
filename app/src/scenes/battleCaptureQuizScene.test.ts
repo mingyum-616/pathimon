@@ -17,7 +17,7 @@ describe('BattleScene capture quiz and first trainer guidance', () => {
     expect(battleSceneSource).toContain('showFirstTrainerGuide');
     expect(battleSceneSource).toContain('예고된 처치의 피해 배율이 낮은 패시몬으로 교체하세요.');
     expect(battleSceneSource).toContain('도감의 상성표');
-    expect(battleSceneSource).toContain('가능한 한 파티를 채워 5층 사람 전투에 대비하세요.');
+    expect(battleSceneSource).toContain('가능한 한 파티를 채워 전투에 대비하세요.');
     expect(battleSceneSource).toContain('자세히 보기');
   });
 

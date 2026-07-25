@@ -755,7 +755,7 @@ export class BattleScene extends Phaser.Scene {
       this.notice,
       helperText,
       this.state.floor === 1 && this.state.encounterKind === 'wild'
-        ? '가능한 한 파티를 채워 5층 사람 전투에 대비하세요.'
+        ? '가능한 한 파티를 채워 전투에 대비하세요.'
         : '',
     ).forEach((line, index) => {
       const fontSize = index === 0 ? 24 : index === 1 ? 17 : 15;
