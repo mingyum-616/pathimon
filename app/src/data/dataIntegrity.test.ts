@@ -19,6 +19,12 @@ const pathimonAssets = import.meta.glob('/public/images/pathimon/*.png', {
   import: 'default',
 });
 
+const pathimonNoteFiles = import.meta.glob('/src/data/pathimon-notes/**/*.md', {
+  eager: true,
+  query: '?raw',
+  import: 'default',
+});
+
 const bossCharacterAssets = import.meta.glob('/public/images/trainers/boss/*.png', {
   eager: true,
   query: '?url',
@@ -112,6 +118,31 @@ describe('Pathimon data', () => {
     // 이름에 `-유충`을 붙인다. 노트의 `진화: 패턴 B`(사람 안에서 성충이 되지 못함)와 어긋나는 지점이라 재검토 대상이다.
     expect(NOTE_MONSTERS[72]?.name).toBe('기어가기-유충');
     expect(NOTE_MONSTERS[NOTE_MONSTERS.length - 1]?.name).toBe('선천빅');
+  });
+
+  it('keeps generation source sheets out of public runtime assets', () => {
+    const sourceSheets = Object.keys(pathimonAssets).filter((path) => /source/i.test(path));
+
+    expect(sourceSheets).toEqual([]);
+  });
+
+  it('keeps inactive notes out of the eager game loading path', () => {
+    const categorizedNotes = Object.keys(pathimonNoteFiles).filter((path) =>
+      /\/drafts\/[^/]+\/[^/]+\.md$/.test(path),
+    );
+    const rootSelectedNoteCount = 2;
+    const inactiveDraftDocuments = [
+      'NAME_CANDIDATES.md',
+      'NAME_PROMPT.md',
+      'NAME_SELECTIONS.md',
+      'REVIEW_NEEDED_PATHIMON.md',
+      'REVIEW_NOTES.md',
+    ];
+
+    expect(categorizedNotes).toHaveLength(NOTE_MONSTERS.length - rootSelectedNoteCount);
+    for (const fileName of inactiveDraftDocuments) {
+      expect(pathimonNoteFiles[`/src/data/pathimon-notes/drafts/${fileName}`]).toBeUndefined();
+    }
   });
 
   it('uses note stats as battle-ready hp, attack, and defense values', () => {

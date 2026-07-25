@@ -3,3 +3,6 @@ app/node_modules/
 app/dist/
 .superpowers/
 pokerogue-beta/
+
+# Local project-organizer archive
+_archive/
