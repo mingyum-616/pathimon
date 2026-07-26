@@ -37,6 +37,7 @@ import {
   hpPercentLabel,
   lockedMoveOverlayPath,
   mobileHomeButtonLayout,
+  monsterStatLine,
   normalizedSpriteScale,
   paginateWrappedTextBlocks,
   paginateWrappedTextLines,
@@ -81,6 +82,17 @@ function createMonster(overrides: Partial<RuntimeMonster> = {}): RuntimeMonster 
 }
 
 describe('battle UI helpers', () => {
+  it('formats HP, attack, and defense together for the status card', () => {
+    const monster = createMonster({
+      hp: 55,
+      maxHp: 55,
+      attack: 80,
+      defense: 50,
+    });
+
+    expect(monsterStatLine(monster)).toBe('HP 55/55 · 공격 80 · 방어 50');
+  });
+
   it('preserves all wrapped learning lines across fixed-size pages', () => {
     const lines = Array.from({ length: 9 }, (_, index) => `줄 ${index + 1}`);
 

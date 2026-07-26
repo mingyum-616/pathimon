@@ -1050,6 +1050,10 @@ export function battleMoveSlots(monster: RuntimeMonster): MoveSlot[] {
   return monster.moveSlots ?? monster.moveset.slice(0, 4);
 }
 
+export function monsterStatLine(monster: RuntimeMonster): string {
+  return `HP ${monster.hp}/${monster.maxHp} · 공격 ${monster.attack} · 방어 ${monster.defense}`;
+}
+
 export function battleDexSummary(enemy: RuntimeMonster, defender?: RuntimeMonster): BattleDexSummary {
   const moveRows = enemy.isTrainer
     ? (defender ? formatBossAttackMatchupRows(enemy, defender)
@@ -1076,7 +1080,7 @@ export function battleDexSummary(enemy: RuntimeMonster, defender?: RuntimeMonste
     moveRows,
     moveTabLabel: enemy.isTrainer ? '효과 기술' : '기술 목록',
     opponentName: enemy.name,
-    statLine: `HP ${enemy.hp}/${enemy.maxHp} · 공격 ${enemy.attack} · 방어 ${enemy.defense}`,
+    statLine: monsterStatLine(enemy),
     typeLine: `타입: ${enemy.category}`,
   };
 }

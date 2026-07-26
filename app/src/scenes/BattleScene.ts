@@ -69,6 +69,7 @@ import {
   matchupGateCopy,
   mobileControlOverlayInteractive,
   mobileHomeButtonLayout,
+  monsterStatLine,
   shouldGateMatchupTable,
   normalizedSpriteScale,
   paginateWrappedTextBlocks,
@@ -2148,7 +2149,14 @@ export class BattleScene extends Phaser.Scene {
     this.add.rectangle(42, 92, 304, 232, 0xf5f2d8).setOrigin(0).setAlpha(0.75);
     const assets = pathimonSpriteAssets(monster, this.state.visualStyle);
     this.drawMonsterSprite(monster, assets.front, 194, 306, monster.isTrainer ? 2.2 : 2.6);
-    addLabel(this, 54, 344, `HP ${monster.hp}/${monster.maxHp}`, 20).setColor('#20202c');
+    addBoxLabel(this, 54, 340, monsterStatLine(monster), {
+      width: 276,
+      height: 30,
+      size: 17,
+      minSize: 12,
+      maxLines: 1,
+      color: '#20202c',
+    });
     drawHpBar(this, 54, 386, 250, hpPct(monster));
     addBoxLabel(this, 54, 414, monster.name, { width: 276, height: 30, size: 24, minSize: 14, maxLines: 1, color: '#20202c' });
 
