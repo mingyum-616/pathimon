@@ -23,6 +23,7 @@ describe('scene registration', () => {
       'BattleScene',
       'ShopScene',
       'BossIntroScene',
+      'EndingScene',
     ]);
   });
 });
