@@ -36,6 +36,7 @@ import {
   hpPct,
   hpPercentLabel,
   lockedMoveOverlayPath,
+  mobileControlOverlayInteractive,
   mobileHomeButtonLayout,
   monsterStatLine,
   normalizedSpriteScale,
@@ -82,6 +83,14 @@ function createMonster(overrides: Partial<RuntimeMonster> = {}): RuntimeMonster 
 }
 
 describe('battle UI helpers', () => {
+  it('enables mobile controls when the browser reports touch points', () => {
+    expect(mobileControlOverlayInteractive({
+      hasTouch: false,
+      coarsePointer: false,
+      maxTouchPoints: 2,
+    })).toBe(true);
+  });
+
   it('formats HP, attack, and defense together for the status card', () => {
     const monster = createMonster({
       hp: 55,

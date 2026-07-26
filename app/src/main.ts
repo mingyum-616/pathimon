@@ -3,6 +3,7 @@ import 'pretendard/dist/web/variable/pretendardvariable.css';
 import { registerSW } from 'virtual:pwa-register';
 import { createGameConfig } from './game/config';
 import { mountGlobalControls } from './ui/globalControls';
+import { mountMobileLayout } from './ui/mobileLayout';
 
 registerSW({
   immediate: true,
@@ -26,7 +27,13 @@ async function boot(): Promise<void> {
   }
 
   const game = new Phaser.Game(createGameConfig('game'));
-  mountGlobalControls(game);
+  const unmountGlobalControls = mountGlobalControls(game);
+  const unmountMobileLayout = mountMobileLayout(game);
+
+  window.addEventListener('beforeunload', () => {
+    unmountMobileLayout();
+    unmountGlobalControls();
+  }, { once: true });
 }
 
 void boot();

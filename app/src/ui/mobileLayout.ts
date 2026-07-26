@@ -1,0 +1,80 @@
+import type Phaser from 'phaser';
+
+export interface TouchCapabilitySignals {
+  hasTouch: boolean;
+  coarsePointer: boolean;
+  maxTouchPoints: number;
+}
+
+type LockableScreenOrientation = ScreenOrientation & {
+  lock?: (orientation: 'landscape') => Promise<void>;
+};
+
+export function isTouchCapable(signals: TouchCapabilitySignals): boolean {
+  return signals.hasTouch || signals.coarsePointer || signals.maxTouchPoints > 0;
+}
+
+export function shouldShowRotateOverlay(
+  signals: TouchCapabilitySignals,
+  width: number,
+  height: number,
+): boolean {
+  return isTouchCapable(signals) && height > width;
+}
+
+function touchCapabilitySignals(): TouchCapabilitySignals {
+  return {
+    hasTouch: 'ontouchstart' in window,
+    coarsePointer: window.matchMedia('(pointer: coarse)').matches,
+    maxTouchPoints: navigator.maxTouchPoints ?? 0,
+  };
+}
+
+export function mountMobileLayout(game: Phaser.Game): () => void {
+  if (typeof document === 'undefined') return () => undefined;
+
+  const overlay = document.createElement('div');
+  overlay.setAttribute('role', 'status');
+  overlay.textContent = '기기를 가로로 돌려주세요';
+  Object.assign(overlay.style, {
+    alignItems: 'center',
+    background: '#182131',
+    color: '#fff',
+    display: 'none',
+    fontSize: '20px',
+    inset: '0',
+    justifyContent: 'center',
+    position: 'fixed',
+    zIndex: '10030',
+  });
+  document.body.appendChild(overlay);
+
+  const canvas = game.canvas;
+  const initialPointerEvents = canvas.style.pointerEvents;
+  const syncLayout = (): void => {
+    const showOverlay = shouldShowRotateOverlay(
+      touchCapabilitySignals(),
+      window.innerWidth,
+      window.innerHeight,
+    );
+    overlay.style.display = showOverlay ? 'flex' : 'none';
+    overlay.style.pointerEvents = showOverlay ? 'auto' : 'none';
+    canvas.style.pointerEvents = showOverlay ? 'none' : initialPointerEvents;
+  };
+
+  syncLayout();
+  window.addEventListener('resize', syncLayout);
+  window.addEventListener('orientationchange', syncLayout);
+
+  const orientation = screen.orientation as LockableScreenOrientation | undefined;
+  if (isTouchCapable(touchCapabilitySignals()) && orientation?.lock) {
+    void orientation.lock('landscape').catch(() => undefined);
+  }
+
+  return () => {
+    window.removeEventListener('resize', syncLayout);
+    window.removeEventListener('orientationchange', syncLayout);
+    canvas.style.pointerEvents = initialPointerEvents;
+    overlay.remove();
+  };
+}

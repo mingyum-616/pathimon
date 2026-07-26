@@ -13,12 +13,32 @@
     <link rel="apple-touch-icon" href="./icons/pathimon-192.png" />
     <title>Pathimon</title>
     <style>
-      html,
-      body,
+      html {
+        box-sizing: border-box;
+      }
+
+      body {
+        box-sizing: border-box;
+        height: 100%;
+        margin: 0;
+        padding:
+          env(safe-area-inset-top)
+          env(safe-area-inset-right)
+          env(safe-area-inset-bottom)
+          env(safe-area-inset-left);
+        background: #182131;
+        overflow: hidden;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: inherit;
+      }
+
       #game {
         width: 100%;
         height: 100%;
-        margin: 0;
         background: #182131;
         overflow: hidden;
       }

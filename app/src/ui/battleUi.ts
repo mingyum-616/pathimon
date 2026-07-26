@@ -16,6 +16,7 @@ import { bossMoveEffectiveness, createBossDefenseProfile } from '../battle/bossM
 import { interpolatePathimonName, withParticle } from '../game/text';
 import { randomLearningPoint, sanitizeLearningText } from '../game/learning';
 import type { AbilityId, CapsuleId, EffectPrimitive, EncounterKind, MonsterData, MoveData, MoveId, MoveSlot, RunMode, RuntimeMonster, TagValue, VisualStyle } from '../types/game';
+import { isTouchCapable, type TouchCapabilitySignals } from './mobileLayout';
 
 export type BattleActionId = 'fight' | 'pass' | 'capsule' | 'dex' | 'party';
 export type PartyMenuPurpose = 'switch' | 'forced' | 'release';
@@ -455,8 +456,8 @@ export function mobileHomeButtonLayout(): LabeledButtonLayout {
   };
 }
 
-export function mobileControlOverlayInteractive(input: { coarsePointer: boolean; hasTouch: boolean }): boolean {
-  return input.hasTouch && input.coarsePointer;
+export function mobileControlOverlayInteractive(input: TouchCapabilitySignals): boolean {
+  return isTouchCapable(input);
 }
 
 // 도전모드에서 상성표는 사실상 정답표다. 그냥 열리면 예고를 읽고 교체하는 판단이 사라진다.

@@ -2884,6 +2884,7 @@ export class BattleScene extends Phaser.Scene {
     return mobileControlOverlayInteractive({
       hasTouch: this.sys.game.device.input.touch,
       coarsePointer: window.matchMedia('(pointer: coarse)').matches,
+      maxTouchPoints: navigator.maxTouchPoints ?? 0,
     });
   }
 
