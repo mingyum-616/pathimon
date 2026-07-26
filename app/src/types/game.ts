@@ -285,10 +285,14 @@ export interface BossData {
   symptoms: string[];
   encounterDialogue?: string[];
   phase2Dialogue?: string[];
-  finalBossSkill?: 'seal';
+  fixedAttack?: number;
+  finalBossSkill?: FinalBossSkillId;
   finalBossSkillName?: string;
+  finalBossSkillDialogue?: string[];
   finalBossSkillAnnouncement?: string;
 }
+
+export type FinalBossSkillId = 'parasitization' | 'seal' | 'keen_eye' | 'nk_activation';
 
 export interface TrainerData {
   id: string;
@@ -344,10 +348,14 @@ export interface RuntimeMonster {
   bossPhase2Pending?: boolean;
   encounterDialogue?: string[];
   phase2Dialogue?: string[];
-  finalBossSkill?: 'seal';
+  finalBossSkill?: FinalBossSkillId;
   finalBossSkillName?: string;
+  finalBossSkillDialogue?: string[];
   finalBossSkillAnnouncement?: string;
   finalBossSkillApplied?: boolean;
+  parasitizationStage?: 'armed' | 'egg' | 'adult';
+  parasitizationEggTurnsRemaining?: number;
+  parasitizationBaseName?: string;
   sealedByBoss?: boolean;
   sealedOriginalName?: string;
   spriteCrop?: {
@@ -445,7 +453,7 @@ export interface RunState {
   lastPlayerHitEffectiveness?: HitEffectiveness;
   battleStatUpCue?: {
     stat: 'attack';
-    target: 'player';
+    target: 'player' | 'enemy';
   };
   pendingSwitchAttackReward?: boolean;
   shopInventory?: ShopItem[];

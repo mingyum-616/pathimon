@@ -419,7 +419,7 @@ export function paginateWrappedTextBlocks(blocks: string[][], maxLines: number):
 }
 
 export function stripMarkdownEmphasis(text: string): string {
-  return text.replace(/\*/g, '');
+  return text.replace(/[*`]/g, '');
 }
 
 export interface ButtonRectLayout {
@@ -1023,7 +1023,11 @@ export function formatMoveDetailSections(
 }
 
 export function statusProfileMemoLines(monster: RuntimeMonster): string[] {
-  return monster.profileMemo?.filter((line) => line.trim().length > 0) ?? ['메모가 아직 정리되지 않았습니다.'];
+  // 노트 학습포인트의 `**강조**`·`*기울임*` 마크다운을 스탯 화면에선 그대로 보여주면 안 된다.
+  const lines = (monster.profileMemo ?? [])
+    .map((line) => stripMarkdownEmphasis(line))
+    .filter((line) => line.trim().length > 0);
+  return lines.length > 0 ? lines : ['메모가 아직 정리되지 않았습니다.'];
 }
 
 export function clampProfileMemoScroll(offset: number, contentHeight: number, viewportHeight: number): number {
@@ -1223,8 +1227,8 @@ export function symptomSummary(monster: RuntimeMonster): string {
   return labels.length > 0 ? compactLabels(labels) : '관찰 중';
 }
 
-export function statusSummary(monster: RuntimeMonster): string {
-  const labels = effectLabels(monster);
+export function statusSummary(monster: RuntimeMonster, extraLabels: string[] = []): string {
+  const labels = [...effectLabels(monster), ...extraLabels];
   return labels.length > 0 ? `상태: ${compactLabels(labels)}` : '상태: 정상';
 }
 
@@ -1233,14 +1237,18 @@ function compactLabels(labels: string[], visibleCount = 3): string {
   return `${labels.slice(0, visibleCount).join(', ')} 외 ${labels.length - visibleCount}`;
 }
 
-export function battleUnitPanelRows(monster: RuntimeMonster, role: BattleUnitPanelRole): BattleUnitPanelRow[] {
+export function battleUnitPanelRows(
+  monster: RuntimeMonster,
+  role: BattleUnitPanelRole,
+  extraStatusLabels: string[] = [],
+): BattleUnitPanelRow[] {
   const rows: BattleUnitPanelRow[] = [];
   if (monster.isBoss) rows.push({ kind: 'heading', text: 'BOSS' });
 
   rows.push({ kind: 'name', text: monster.name });
   if (!monster.isTrainer) rows.push({ kind: 'scientificName', text: monster.scientificName });
   if (!monster.isTrainer || role !== 'player') rows.push({ kind: 'defense', text: `방어특성: ${defenseTraitSummary(monster)}` });
-  rows.push({ kind: 'status', text: statusSummary(monster) });
+  rows.push({ kind: 'status', text: statusSummary(monster, extraStatusLabels) });
   if (monster.isTrainer) rows.push({ kind: 'symptoms', text: `증상: ${symptomSummary(monster)}` });
 
   return rows;

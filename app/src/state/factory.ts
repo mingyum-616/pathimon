@@ -114,6 +114,7 @@ export function createBossInstance(index = 0, floor = 10): RuntimeMonster {
     phase2Dialogue: boss.phase2Dialogue ? [...boss.phase2Dialogue] : undefined,
     finalBossSkill: boss.finalBossSkill,
     finalBossSkillName: boss.finalBossSkillName,
+    finalBossSkillDialogue: boss.finalBossSkillDialogue ? [...boss.finalBossSkillDialogue] : undefined,
     finalBossSkillAnnouncement: boss.finalBossSkillAnnouncement,
     finalBossSkillApplied: false,
     effects: [],

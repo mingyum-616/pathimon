@@ -44,6 +44,12 @@ const BOSS_ABILITIES: BossData['abilityPool'] = [
 const BOSS_MOVES: BossData['movePool'] = BOSS_ATTACK_MOVE_IDS;
 
 export const LATE_GAME_BOSS_IDS: string[] = ['prof_p', 'prof_s', 'prof_k', 'prof_w'];
+const PROFESSOR_BOSS_ASSET_PATHS = new Set([
+  'images/trainers/boss/prof_p.png',
+  'images/trainers/boss/prof_s.png',
+  'images/trainers/glacia.png',
+  'images/trainers/boss/ghetsis.png',
+]);
 
 // 보스·트레이너는 기술 풀과 방어력을 공유하되, 트레이너는 공격력이 더 낮고 HP를 1/4로 줄인다(state/factory.ts).
 // v2 테스트 결과 공격력 136은 초반부터 과도해, 기술 위력은 유지하고 공격력을 낮췄다.
@@ -56,8 +62,10 @@ export const BOSS_COMBAT_STATS = {
 } as const;
 
 function bossAssetPath(id: string, index = 0): string {
-  return characterAssetPathForId(BOSS_CHARACTER_ASSETS, id)
-    ?? BOSS_CHARACTER_ASSETS[index % Math.max(1, BOSS_CHARACTER_ASSETS.length)]
+  const regularAssets = BOSS_CHARACTER_ASSETS.filter((assetPath) => !PROFESSOR_BOSS_ASSET_PATHS.has(assetPath));
+  const exactAsset = characterAssetPathForId(regularAssets, id);
+  return exactAsset
+    ?? regularAssets[index % Math.max(1, regularAssets.length)]
     ?? `images/trainers/boss/${id}.png`;
 }
 
@@ -237,7 +245,10 @@ const PROFESSOR_BOSSES: BossData[] = [
     assetPath: 'images/trainers/boss/prof_p.png',
     fixedAbilities: ['parasite_master'],
     encounterDialogue: ['기생충은 재미있었나요..?', '하하'],
-    phase2Dialogue: ['해피.. 알사탕.. 연어회.. 칼국수..'],
+    phase2Dialogue: ['음.. 아침에 먹은 연어 칼국수가..'],
+    finalBossSkill: 'parasitization',
+    finalBossSkillName: '기생충화',
+    finalBossSkillDialogue: ['최후의 기생충학은... 나 자신이 기생충이 되는 것!'],
   },
   {
     ...createBoss('prof_s', '미생물학 교수 Prof. S', '미생물학 교수 (Professor of Microbiology)', 'S', 250, BOSS_COMBAT_STATS.attack, BOSS_COMBAT_STATS.defense, [
@@ -250,7 +261,7 @@ const PROFESSOR_BOSSES: BossData[] = [
     phase2Dialogue: ['One minute...'],
     finalBossSkill: 'seal',
     finalBossSkillName: '봉인',
-    finalBossSkillAnnouncement: 'Prof. S는 봉인을 사용한다!',
+    finalBossSkillDialogue: ['새로운 인형이네..?'],
   },
   {
     ...createBoss('prof_k', '약리학 교수 Prof. K', '약리학 교수 (Professor of Pharmacology)', 'K', 270, BOSS_COMBAT_STATS.attack, BOSS_COMBAT_STATS.defense, [
@@ -258,15 +269,28 @@ const PROFESSOR_BOSSES: BossData[] = [
       '용량 조절',
       '치료 전략 분석',
     ]),
-    assetPath: 'images/trainers/boss/prof_k.png',
+    assetPath: 'images/trainers/glacia.png',
+    fixedAbilities: ['mycology_master', 'protozoology_master'],
+    fixedAttack: 40,
+    encounterDialogue: ['안녕하세요 패시몬 여러분?'],
+    phase2Dialogue: ['학습태도가 참 좋네요.. 어렵게 해볼까요?'],
+    finalBossSkill: 'keen_eye',
+    finalBossSkillName: '예민한 눈초리',
+    finalBossSkillDialogue: ['여기서는 다 보인답니다.'],
   },
   {
-    ...createBoss('prof_w', '미생물학 교수 Prof. W', '미생물학 교수 (Professor of Microbiology)', 'W', 246, BOSS_COMBAT_STATS.attack, BOSS_COMBAT_STATS.defense, [
+    ...createBoss('prof_w', '병리학 교수 Prof. W', '병리학 교수 (Professor of Pathology)', 'W', 246, BOSS_COMBAT_STATS.attack, BOSS_COMBAT_STATS.defense, [
       '신속 배양',
       '감염원 추적',
       '공격적 방역',
     ]),
-    assetPath: 'images/trainers/boss/prof_w.png',
+    assetPath: 'images/trainers/boss/ghetsis.png',
+    fixedAbilities: ['virology_master'],
+    encounterDialogue: ['목이 아프군.. 긴 말 않겠다. 사라져라.'],
+    phase2Dialogue: ['음..'],
+    finalBossSkill: 'nk_activation',
+    finalBossSkillName: 'NK 활성화',
+    finalBossSkillDialogue: ['.....!'],
   },
 ];
 
@@ -281,7 +305,10 @@ const USED_BOSS_ASSETS = new Set([
 ]);
 
 const EXTRA_BOSSES: BossData[] = BOSS_CHARACTER_ASSETS
-  .filter((assetPath) => !USED_BOSS_ASSETS.has(assetPath))
+  .filter((assetPath) => (
+    !USED_BOSS_ASSETS.has(assetPath)
+    && !LATE_GAME_BOSS_IDS.includes(assetIdFromPath(assetPath))
+  ))
   .map((assetPath, index) => ({
     id: assetIdFromPath(assetPath),
     name: `${bossAssetLabel(assetPath)}형 방역 지휘관`,
@@ -301,7 +328,7 @@ const REGULAR_BOSSES: BossData[] = [...RAW_BOSSES_WITH_ASSETS, ...EXTRA_BOSSES];
 
 export const BOSSES: BossData[] = [...REGULAR_BOSSES, ...PROFESSOR_BOSSES].map((boss) => ({
   ...boss,
-  attack: BOSS_COMBAT_STATS.attack,
+  attack: boss.fixedAttack ?? BOSS_COMBAT_STATS.attack,
   defense: BOSS_COMBAT_STATS.defense,
 }));
 

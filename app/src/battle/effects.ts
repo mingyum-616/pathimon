@@ -26,7 +26,7 @@ function positiveRoundedDamage(value: number): number {
 }
 
 function dealDamage(monster: RuntimeMonster, damage: number): number {
-  if (damage <= 0) {
+  if (damage <= 0 || monster.parasitizationStage === 'egg') {
     return 0;
   }
 

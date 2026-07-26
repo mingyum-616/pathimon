@@ -1257,6 +1257,139 @@ describe('battle engine', () => {
     expect(result.enemy?.finalBossSkillApplied).toBe(true);
   });
 
+  it('arms non-immediate professor skills only on floor 100', () => {
+    const profP = createBattleState({
+      floor: 100,
+      enemy: createMonster({
+        name: '기생충학 교수 Prof. P',
+        isBoss: true,
+        isTrainer: true,
+        finalBossSkill: 'parasitization',
+      }),
+    });
+    const earlyProfP = createBattleState({
+      floor: 90,
+      enemy: createMonster({
+        name: '기생충학 교수 Prof. P',
+        isBoss: true,
+        isTrainer: true,
+        finalBossSkill: 'parasitization',
+      }),
+    });
+
+    expect(applyFinalBossSkill(profP).enemy?.finalBossSkillApplied).toBe(true);
+    expect(applyFinalBossSkill(profP).enemy?.parasitizationStage).toBe('armed');
+    expect(applyFinalBossSkill(earlyProfP).enemy?.finalBossSkillApplied).toBeFalsy();
+  });
+
+  it('revives Prof. P as an immune egg for two skipped attacks, then restores an adult at attack 80', () => {
+    const battle = createBattleState({
+      floor: 100,
+      party: [createMonster({
+        hp: 200,
+        maxHp: 200,
+        attack: 100,
+        moveset: ['enterotoxin', 'coagulase'],
+      })],
+      enemy: createMonster({
+        name: '기생충학 교수 Prof. P',
+        hp: 1,
+        maxHp: 100,
+        defense: 1,
+        isBoss: true,
+        isTrainer: true,
+        finalBossSkill: 'parasitization',
+        finalBossSkillApplied: true,
+        parasitizationStage: 'armed',
+        moveset: [],
+        statusConditions: { necrosis: 2 },
+      }),
+    });
+
+    const eggRoundOne = resolvePlayerMove(battle, 'enterotoxin', 1, 0, 0);
+
+    expect(eggRoundOne.phase).toBe('battle');
+    expect(eggRoundOne.enemy?.name).toBe('기생충학 교수 Prof. P-충란');
+    expect(eggRoundOne.enemy?.hp).toBe(1);
+    expect(eggRoundOne.enemy?.parasitizationEggTurnsRemaining).toBe(1);
+
+    if (!eggRoundOne.enemy) throw new Error('egg missing');
+    const existingFever = eggRoundOne.enemy.statusConditions?.fever ?? 0;
+    applyEffects(eggRoundOne.party[0], eggRoundOne.enemy, [
+      { kind: 'condition', condition: 'fever', chance: 1, target: 'enemy', stacks: 1 },
+    ]);
+    expect(eggRoundOne.enemy.statusConditions?.fever).toBe(existingFever + 1);
+    expect(tickEffects(eggRoundOne.enemy, () => 1)).toBe(0);
+    expect(eggRoundOne.enemy.hp).toBe(1);
+
+    const adultRound = resolvePlayerMove(eggRoundOne, 'coagulase', 1, 0, 0);
+
+    expect(adultRound.enemy?.name).toBe('기생충학 교수 Prof. P-성충');
+    expect(adultRound.enemy?.parasitizationStage).toBe('adult');
+    expect(adultRound.enemy?.attack).toBe(80);
+    expect(adultRound.enemy?.hp).toBe(adultRound.enemy ? effectiveMaxHp(adultRound.enemy) : 0);
+  });
+
+  it('applies NK damage to the current lead during every status phase', () => {
+    const battle = createBattleState({
+      floor: 100,
+      party: [
+        createMonster({ name: '선두', hp: 100, maxHp: 100, moveset: ['coagulase'] }),
+        createMonster({ name: '후열', hp: 200, maxHp: 200, moveset: ['coagulase'] }),
+      ],
+      enemy: createMonster({
+        name: '병리학 교수 Prof. W',
+        hp: 999,
+        maxHp: 999,
+        isBoss: true,
+        isTrainer: true,
+        finalBossSkill: 'nk_activation',
+        finalBossSkillApplied: true,
+        moveset: [],
+      }),
+    });
+
+    const firstRound = resolvePlayerMove(battle, 'coagulase', 1, 0, 0);
+    expect(firstRound.party[0].hp).toBe(90);
+    expect(firstRound.battleStatusDamage?.player).toBe(10);
+    expect(firstRound.battleStatusLog).toContain('NK');
+
+    const switched = resolveSwitchMonster(firstRound, 1);
+    const secondRound = resolvePlayerMove(switched, 'coagulase', 1, 0, 0);
+    expect(secondRound.party[1].hp).toBe(180);
+  });
+
+  it('raises Prof. K attack only after a voluntary switch', () => {
+    const battle = createBattleState({
+      floor: 100,
+      party: [
+        createMonster({ name: '선두' }),
+        createMonster({ name: '후열' }),
+      ],
+      enemy: createMonster({
+        name: '약리학 교수 Prof. K',
+        isBoss: true,
+        isTrainer: true,
+        finalBossSkill: 'keen_eye',
+        finalBossSkillApplied: true,
+      }),
+    });
+
+    const switched = resolveSwitchMonster(battle, 1);
+    expect(switched.enemy?.effects).toContainEqual(expect.objectContaining({
+      kind: 'buff',
+      stat: 'attack',
+      rank: 1,
+    }));
+
+    const forcedState = createBattleState({
+      ...battle,
+      phase: 'forcedSwitch',
+    });
+    const forced = resolveForcedSwitchMonster(forcedState, 1);
+    expect(forced.enemy?.effects.filter((effect) => effect.stat === 'attack')).toHaveLength(0);
+  });
+
   it('does not allow a sealed substitute to switch into battle', () => {
     const battle = createBattleState({
       party: [

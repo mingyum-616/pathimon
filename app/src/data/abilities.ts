@@ -74,7 +74,7 @@ export const ABILITIES: Record<AbilityId, AbilityData> = {
   },
   parasite_master: {
     id: 'parasite_master',
-    name: '기생충학 마스터',
+    name: '기생충 마스터',
     description: '기생충 계열 패시몬에게 받는 피해를 0.5배로 줄입니다.',
     resistCategory: { 기생충: 0.5, 연충: 0.5, 선충: 0.5, 흡충: 0.5, 조충: 0.5 },
   },
@@ -96,7 +96,7 @@ export const ABILITIES: Record<AbilityId, AbilityData> = {
   // 계열 축
   virology_master: {
     id: 'virology_master',
-    name: '바이러스학 마스터',
+    name: '바이러스 마스터',
     description: '바이러스 계열 패시몬에게 받는 피해를 0.5배로 줄입니다.',
     resistCategory: { 바이러스: 0.5 },
   },
@@ -108,13 +108,13 @@ export const ABILITIES: Record<AbilityId, AbilityData> = {
   },
   mycology_master: {
     id: 'mycology_master',
-    name: '진균학 마스터',
+    name: '진균 마스터',
     description: '진균 계열 패시몬에게 받는 피해를 0.5배로 줄입니다.',
     resistCategory: { 진균: 0.5, 곰팡이: 0.5 },
   },
   protozoology_master: {
     id: 'protozoology_master',
-    name: '원충학 마스터',
+    name: '원생동물 마스터',
     description: '원충 계열 패시몬에게 받는 피해를 0.5배로 줄입니다.',
     resistCategory: { 원충: 0.5, 원생동물: 0.5, 프로토조아: 0.5 },
   },

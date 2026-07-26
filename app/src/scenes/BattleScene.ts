@@ -510,7 +510,12 @@ export class BattleScene extends Phaser.Scene {
     const borderColor = this.pathimonFrameBorderColor(monster);
     const typeIcon = pathimonTypeIcon(monster, this.state.mode);
     const textWidth = width - (typeIcon ? 128 : 36);
-    const rows = battleUnitPanelRows(monster, role);
+    const extraStatusLabels = role === 'player'
+      && this.state.enemy?.finalBossSkill === 'nk_activation'
+      && this.state.enemy.finalBossSkillApplied
+      ? ['NK']
+      : [];
+    const rows = battleUnitPanelRows(monster, role, extraStatusLabels);
 
     this.drawPathimonPanel(x, y, width, height, monster).setAlpha(0.96);
     this.add.rectangle(x, y, width, 5, monster.isBoss ? 0xf0a43a : borderColor, 0.84).setOrigin(0);
@@ -1553,7 +1558,8 @@ export class BattleScene extends Phaser.Scene {
     const playerDefeated = Boolean(previousPlayer && playerDirectDamage >= previousPlayer.hp);
     const playerHitKind = nextState.lastPlayerHitEffectiveness;
     const enemyHitKind = nextState.lastEnemyHitEffectiveness;
-    const playAttackRankUp = Boolean(nextState.battleStatUpCue);
+    const attackRankUpTarget = nextState.battleStatUpCue?.target;
+    const playAttackRankUp = Boolean(attackRankUpTarget);
 
     if (!enemyTookDamage && !playerTookDamage && !enemyDefeated && !playerDefeated) {
       this.isAnimating = true;
@@ -1562,7 +1568,7 @@ export class BattleScene extends Phaser.Scene {
       } else if (playerHitKind === 'none') {
         this.playHitEffect('enemy', 'none', false);
       } else if (playAttackRankUp) {
-        this.playAttackRankUpEffect();
+        this.playAttackRankUpEffect(attackRankUpTarget ?? 'player');
         nextState.battleStatUpCue = undefined;
       } else {
         this.playSfx(battleSfxAssetPaths().statUp, 0.25);
@@ -1588,7 +1594,10 @@ export class BattleScene extends Phaser.Scene {
     }
 
     if (playAttackRankUp && !playerDefeated) {
-      this.time.delayedCall(playerTookDamage ? 560 : 120, () => this.playAttackRankUpEffect());
+      this.time.delayedCall(
+        playerTookDamage ? 560 : 120,
+        () => this.playAttackRankUpEffect(attackRankUpTarget ?? 'player'),
+      );
       nextState.battleStatUpCue = undefined;
       finishDelay = Math.max(finishDelay, playerTookDamage ? 940 : 520);
     }
@@ -1599,8 +1608,8 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
-  private playAttackRankUpEffect(): void {
-    const layout = battleSpriteLayouts().player;
+  private playAttackRankUpEffect(target: 'player' | 'enemy'): void {
+    const layout = battleSpriteLayouts()[target];
     this.playSfx(battleSfxAssetPaths().statUp, 0.42);
     [-28, 0, 28].forEach((offset, index) => {
       const arrow = this.add.sprite(layout.x + offset, layout.y - 112, 'battle_stats', 2)
@@ -2211,18 +2220,17 @@ export class BattleScene extends Phaser.Scene {
       viewportHeight,
     );
 
+    // 뷰포트 밖은 사각형 지오메트리 마스크로 균일하게 가린다.
+    // (예전엔 라벨마다 setCrop으로 잘랐는데, 윗변에 걸친 줄이 crop 오프셋만큼 어긋난 위치로
+    //  슬라이스돼 스크롤할 때 글자가 잘리고 크기가 바뀌는 것처럼 보였다.)
+    const maskGraphics = this.add.graphics().setVisible(false);
+    maskGraphics.fillStyle(0xffffff).fillRect(viewportX, viewportY, viewportWidth, viewportHeight);
+    const memoMask = maskGraphics.createGeometryMask();
+
     let contentY = 0;
     for (const label of labels) {
-      const y = viewportY + contentY - this.statusProfileScroll;
-      const visibleTop = Math.max(viewportY, y);
-      const visibleBottom = Math.min(viewportY + viewportHeight, y + label.height);
-      label.setPosition(viewportX, y);
-
-      if (visibleBottom <= visibleTop) {
-        label.setVisible(false);
-      } else if (visibleTop > y || visibleBottom < y + label.height) {
-        label.setCrop(0, visibleTop - y, textWidth, visibleBottom - visibleTop);
-      }
+      label.setPosition(viewportX, viewportY + contentY - this.statusProfileScroll);
+      label.setMask(memoMask);
       contentY += label.height + gap;
     }
 

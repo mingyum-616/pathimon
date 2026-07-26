@@ -36,8 +36,9 @@ export class BossIntroScene extends Phaser.Scene {
     this.dialogueLines = enemy?.encounterDialogue?.length
       ? [...enemy.encounterDialogue]
       : [`${withParticle(enemy?.name ?? '보스', '이')} 길을 막아섰다.`];
-    if (this.state.floor === 100 && enemy?.finalBossSkillAnnouncement) {
-      this.dialogueLines.push(enemy.finalBossSkillAnnouncement);
+    if (this.state.floor === 100 && enemy?.finalBossSkill && enemy.finalBossSkillName) {
+      this.dialogueLines.push(...(enemy.finalBossSkillDialogue ?? []));
+      this.dialogueLines.push(`${withParticle(enemy.name, '은')} ${enemy.finalBossSkillName}을 사용했다!`);
     }
     this.dialogueIndex = 0;
     this.visibleCharacters = 0;

@@ -9,6 +9,7 @@ import {
   actionFailureChance,
   actionFailureLabel,
   clampHpToEffectiveMax,
+  effectiveMaxHp,
   statusConditionStacks,
 } from '../data/statusConditions';
 import { TAG_LABELS } from '../data/labels';
@@ -53,6 +54,7 @@ function cloneMonster(monster: RuntimeMonster): RuntimeMonster {
     bossPhase2Pending: monster.bossPhase2Pending,
     encounterDialogue: monster.encounterDialogue ? [...monster.encounterDialogue] : undefined,
     phase2Dialogue: monster.phase2Dialogue ? [...monster.phase2Dialogue] : undefined,
+    finalBossSkillDialogue: monster.finalBossSkillDialogue ? [...monster.finalBossSkillDialogue] : undefined,
     profileMemo: monster.profileMemo ? [...monster.profileMemo] : undefined,
     countermeasures: monster.countermeasures ? {
       direct: [...monster.countermeasures.direct],
@@ -266,6 +268,7 @@ function defeatedOpponentMessage(enemy: RuntimeMonster, byOngoingEffects = false
 }
 
 function markDamage(monster: RuntimeMonster, damage: number): void {
+  if (monster.parasitizationStage === 'egg') return;
   monster.hp = Math.max(0, monster.hp - damage);
   clampHpToEffectiveMax(monster);
 }
@@ -408,6 +411,11 @@ function planHumanMoves(
   activeIndex = 0,
   random: () => number = Math.random,
 ): MoveId[] {
+  if (enemy.parasitizationStage === 'egg') {
+    clearPlannedHumanMoves(enemy);
+    return [];
+  }
+
   if (!isHumanEnemy(enemy)) {
     return enemy.moveset[0] ? [enemy.moveset[0]] : [];
   }
@@ -451,6 +459,39 @@ function clearPlannedHumanMoves(enemy: RuntimeMonster): void {
   enemy.plannedMoveIds = [];
 }
 
+function beginParasitization(enemy: RuntimeMonster): boolean {
+  if (
+    enemy.hp > 0
+    || enemy.finalBossSkill !== 'parasitization'
+    || !enemy.finalBossSkillApplied
+    || enemy.parasitizationStage !== 'armed'
+  ) {
+    return false;
+  }
+
+  const baseName = enemy.parasitizationBaseName ?? enemy.name;
+  enemy.parasitizationBaseName = baseName;
+  enemy.parasitizationStage = 'egg';
+  enemy.parasitizationEggTurnsRemaining = 2;
+  enemy.name = `${baseName}-충란`;
+  enemy.hp = 1;
+  enemy.fainted = false;
+  clearPlannedHumanMoves(enemy);
+  return true;
+}
+
+function completeParasitization(enemy: RuntimeMonster): void {
+  if (enemy.parasitizationStage !== 'egg' || (enemy.parasitizationEggTurnsRemaining ?? 0) > 0) return;
+
+  const baseName = enemy.parasitizationBaseName ?? enemy.name.replace(/-충란$/, '');
+  enemy.parasitizationStage = 'adult';
+  enemy.name = `${baseName}-성충`;
+  enemy.attack = 80;
+  enemy.hp = effectiveMaxHp(enemy);
+  enemy.fainted = false;
+  clearPlannedHumanMoves(enemy);
+}
+
 export function bossPhaseTwoDialogue(enemy: RuntimeMonster, floor: number): string[] {
   if (enemy.phase2Dialogue?.length) return [...enemy.phase2Dialogue];
   return floor <= 60 ? ['...'] : [];
@@ -475,9 +516,18 @@ export function applyFinalBossSkill(state: RunState, random: () => number = Math
   if (
     nextState.floor !== 100
     || !enemy?.isBoss
-    || enemy.finalBossSkill !== 'seal'
+    || !enemy.finalBossSkill
     || enemy.finalBossSkillApplied
   ) {
+    return nextState;
+  }
+
+  if (enemy.finalBossSkill !== 'seal') {
+    enemy.finalBossSkillApplied = true;
+    if (enemy.finalBossSkill === 'parasitization') {
+      enemy.parasitizationStage = 'armed';
+      enemy.parasitizationBaseName = enemy.name;
+    }
     return nextState;
   }
 
@@ -607,6 +657,15 @@ function resolveHumanTurn(
   activeIndex = 0,
   criticalRandom: CriticalRandomSource = noCriticalRandom,
 ): EnemyTurnResult {
+  if (enemy.parasitizationStage === 'egg') {
+    clearPlannedHumanMoves(enemy);
+    enemy.parasitizationEggTurnsRemaining = Math.max(
+      0,
+      (enemy.parasitizationEggTurnsRemaining ?? 0) - 1,
+    );
+    return { log: `${withParticle(enemy.name, '은')} 충란 상태라 공격하지 않는다.` };
+  }
+
   const plannedMoveIds = planHumanMoves(enemy, actor, party, activeIndex);
   clearPlannedHumanMoves(enemy);
 
@@ -690,9 +749,34 @@ function finishBattleRound(
   learningDetail?: string,
   learningText?: string,
 ): RunState {
-  const actorEffectDamage = tickEffects(actor);
+  let actorEffectDamage = tickEffects(actor);
   const enemyEffectDamage = tickEffects(enemy);
-  const effectLog = statusDamageLog(actor, actorEffectDamage, enemy, enemyEffectDamage);
+  beginParasitization(enemy);
+
+  let nkLog = '';
+  if (
+    enemy.finalBossSkill === 'nk_activation'
+    && enemy.finalBossSkillApplied
+    && actor.hp > 0
+  ) {
+    const beforeNkHp = actor.hp;
+    markDamage(actor, Math.max(1, Math.ceil(effectiveMaxHp(actor) * 0.1)));
+    const nkDamage = beforeNkHp - actor.hp;
+    actorEffectDamage += nkDamage;
+    if (nkDamage > 0) {
+      nkLog = `${enemy.name}의 NK 활성화가 ${actor.name}에게 최대 체력의 10% 피해를 주었다.`;
+    }
+  }
+
+  let effectLog = [statusDamageLog(actor, actorEffectDamage, enemy, enemyEffectDamage), nkLog]
+    .filter(Boolean)
+    .join('\n');
+  if (enemy.parasitizationStage === 'egg' && (enemy.parasitizationEggTurnsRemaining ?? 0) <= 0) {
+    completeParasitization(enemy);
+    effectLog = [effectLog, `${enemy.name}으로 성장해 다시 전투를 시작한다!`]
+      .filter(Boolean)
+      .join('\n');
+  }
   const pendingSwitchReward = state.pendingSwitchAttackReward;
   state.pendingSwitchAttackReward = undefined;
   const switchRewardRanks = actor.effects.reduce((total, effect) => (
@@ -868,6 +952,7 @@ export function resolvePlayerMove(
   const actorLog = `${actor.name}의 ${resolvedMove.name}!\n${formatMoveDescription(resolvedMove, actor)}${criticalHitText(result)}`;
   const learningText = battleLearnText(nextState, resolvedMove);
 
+  beginParasitization(enemy);
   if (enemy.hp <= 0) {
     nextState.pendingSwitchAttackReward = undefined;
     nextState.battleActionLog = formatBattleActionLog(nextState, actorLog, '', learningText);
@@ -954,10 +1039,24 @@ export function resolveSwitchMonster(
     return nextState;
   }
 
+  if (enemy.finalBossSkill === 'keen_eye' && enemy.finalBossSkillApplied) {
+    enemy.effects.push({
+      kind: 'buff',
+      stat: 'attack',
+      pct: 50,
+      rank: 1,
+      turns: 99,
+    });
+    nextState.battleStatUpCue = { stat: 'attack', target: 'enemy' };
+  }
+
   nextState.pendingSwitchAttackReward = previousMultiplier > targetMultiplier && targetMultiplier === 1;
-  nextState.lastLog = previousMultiplier > targetMultiplier
+  const switchLog = previousMultiplier > targetMultiplier
     ? `${withParticle(target.name, '이')} 나왔다.\n교체 성공: 예상 피해 ×${previousMultiplier} → ×${targetMultiplier}로 감소!`
     : `${withParticle(target.name, '이')} 나왔다.`;
+  nextState.lastLog = enemy.finalBossSkill === 'keen_eye' && enemy.finalBossSkillApplied
+    ? `${switchLog}\n예민한 눈초리: ${enemy.name}의 공격 +1!`
+    : switchLog;
   nextState.phase = 'battle';
   return nextState;
 }

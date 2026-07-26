@@ -92,6 +92,14 @@ describe('battle UI helpers', () => {
     expect(stripMarkdownEmphasis('**요코가와흡충**과 *타카하시흡충*')).toBe('요코가와흡충과 타카하시흡충');
   });
 
+  it('shows NK as an active battle marker in the pathimon status line', () => {
+    expect(statusSummary(createMonster(), ['NK'])).toBe('상태: NK');
+    expect(battleUnitPanelRows(createMonster(), 'player', ['NK'])).toContainEqual({
+      kind: 'status',
+      text: '상태: NK',
+    });
+  });
+
   it('places panels opposite the combat sprites like pokerogue', () => {
     const panelLayout = battleUnitPanelLayouts();
     const spriteLayout = battleSpriteLayouts();

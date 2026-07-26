@@ -32,6 +32,12 @@ const bossCharacterAssets = import.meta.glob('/public/images/trainers/boss/*.png
   import: 'default',
 });
 
+const trainerRootAssets = import.meta.glob('/public/images/trainers/*.png', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+});
+
 const trainerCharacterAssets = import.meta.glob('/public/images/trainers/trainer/*.png', {
   eager: true,
   query: '?url',
@@ -65,20 +71,50 @@ describe('Pathimon data', () => {
     expect(roster.slice(0, 6).some((bossId) => LATE_GAME_BOSS_IDS.includes(bossId))).toBe(false);
   });
 
-  it('gives every professor boss an exclusive named asset and keeps Prof. P parasite mastery', () => {
+  it('gives every professor boss its approved identity, dialogue, defenses, and floor-100 skill', () => {
     const professors = LATE_GAME_BOSS_IDS.map((id) => BOSSES.find((boss) => boss.id === id));
+    const [profP, profS, profK, profW] = professors;
 
     expect(professors.every(Boolean)).toBe(true);
     expect(professors.map((boss) => boss?.assetPath)).toEqual([
       'images/trainers/boss/prof_p.png',
       'images/trainers/boss/prof_s.png',
-      'images/trainers/boss/prof_k.png',
-      'images/trainers/boss/prof_w.png',
+      'images/trainers/glacia.png',
+      'images/trainers/boss/ghetsis.png',
     ]);
     expect(new Set(professors.map((boss) => boss?.assetPath)).size).toBe(4);
 
-    const profPIndex = BOSSES.findIndex((boss) => boss.id === 'prof_p');
+    expect(profP?.fixedAbilities).toEqual(['parasite_master']);
+    expect(profP?.phase2Dialogue).toEqual(['음.. 아침에 먹은 연어 칼국수가..']);
+    expect(profP?.finalBossSkill).toBe('parasitization');
+    expect(profP?.finalBossSkillName).toBe('기생충화');
+    expect(profP?.finalBossSkillDialogue).toEqual(['최후의 기생충학은... 나 자신이 기생충이 되는 것!']);
+
+    expect(profS?.finalBossSkill).toBe('seal');
+    expect(profS?.finalBossSkillDialogue).toEqual(['새로운 인형이네..?']);
+
+    expect(profK?.fixedAbilities).toEqual(['mycology_master', 'protozoology_master']);
+    expect(profK?.encounterDialogue).toEqual(['안녕하세요 패시몬 여러분?']);
+    expect(profK?.phase2Dialogue).toEqual(['학습태도가 참 좋네요.. 어렵게 해볼까요?']);
+    expect(profK?.finalBossSkill).toBe('keen_eye');
+    expect(profK?.finalBossSkillDialogue).toEqual(['여기서는 다 보인답니다.']);
+
+    expect(profW?.name).toBe('병리학 교수 Prof. W');
+    expect(profW?.fixedAbilities).toEqual(['virology_master']);
+    expect(profW?.encounterDialogue).toEqual(['목이 아프군.. 긴 말 않겠다. 사라져라.']);
+    expect(profW?.phase2Dialogue).toEqual(['음..']);
+    expect(profW?.finalBossSkill).toBe('nk_activation');
+    expect(profW?.finalBossSkillDialogue).toEqual(['.....!']);
+
+    const profPIndex = BOSSES.findIndex((boss) => boss.id === profP?.id);
+    const profKIndex = BOSSES.findIndex((boss) => boss.id === profK?.id);
     expect(createBossInstance(profPIndex, 70).abilities).toContain('parasite_master');
+    expect(createBossInstance(profKIndex, 70).attack).toBe(40);
+
+    expect(ABILITIES.parasite_master.name).toBe('기생충 마스터');
+    expect(ABILITIES.virology_master.name).toBe('바이러스 마스터');
+    expect(ABILITIES.mycology_master.name).toBe('진균 마스터');
+    expect(ABILITIES.protozoology_master.name).toBe('원생동물 마스터');
   });
 
   // 난도 곡선이 여기 하나에 걸려 있다. 풀이 얕으면 층이 깊어져도 방어특성이 안 늘어난다.
@@ -442,12 +478,20 @@ describe('Pathimon data', () => {
   });
 
   it('uses every image from the organized trainers boss and trainer folders', () => {
+    const supersededProfessorAssets = new Set([
+      'images/trainers/boss/prof_k.png',
+      'images/trainers/boss/prof_w.png',
+    ]);
+    const activeBossFolderAssets = BOSS_CHARACTER_ASSETS.filter(
+      (assetPath) => !supersededProfessorAssets.has(assetPath),
+    );
+
     expect(TRAINER_CHARACTER_ASSETS).toHaveLength(Object.keys(trainerCharacterAssets).length);
     expect(BOSS_CHARACTER_ASSETS).toHaveLength(Object.keys(bossCharacterAssets).length);
     expect(TRAINER_CHARACTER_ASSETS.length).toBeGreaterThanOrEqual(20);
     expect(BOSS_CHARACTER_ASSETS.length).toBeGreaterThanOrEqual(50);
     expect(TRAINERS.map((trainer) => trainer.assetPath)).toEqual(expect.arrayContaining(TRAINER_CHARACTER_ASSETS));
-    expect(BOSSES.map((boss) => boss.assetPath)).toEqual(expect.arrayContaining(BOSS_CHARACTER_ASSETS));
+    expect(BOSSES.map((boss) => boss.assetPath)).toEqual(expect.arrayContaining(activeBossFolderAssets));
 
     for (const trainer of TRAINERS) {
       expect(trainer.assetPath.startsWith('images/trainers/trainer/')).toBe(true);
@@ -455,8 +499,10 @@ describe('Pathimon data', () => {
     }
 
     for (const boss of BOSSES) {
-      expect(boss.assetPath.startsWith('images/trainers/boss/')).toBe(true);
-      expect(bossCharacterAssets[`/public/${boss.assetPath}`]).toBeDefined();
+      const asset = boss.assetPath.startsWith('images/trainers/boss/')
+        ? bossCharacterAssets[`/public/${boss.assetPath}`]
+        : trainerRootAssets[`/public/${boss.assetPath}`];
+      expect(asset).toBeDefined();
     }
   });
 
