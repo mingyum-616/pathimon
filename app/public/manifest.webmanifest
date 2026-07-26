@@ -1,0 +1,25 @@
+{
+  "name": "패시몬: 감염과 면역",
+  "short_name": "패시몬",
+  "description": "병원체 패시몬과 함께 감염과 면역을 익히는 전투 게임",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#182131",
+  "theme_color": "#182131",
+  "icons": [
+    {
+      "src": "./icons/pathimon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/pathimon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
