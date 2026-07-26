@@ -30,13 +30,13 @@ describe('ending feedback', () => {
       expect.objectContaining({ method: 'POST' }),
     );
     const request = JSON.parse(fetchImpl.mock.calls[0][1].body as string);
-    expect(request).toMatchObject({
+    expect(request).toEqual({
+      access_key: 'abf86e09-9622-4783-82f8-4e82976b2c26',
       rating: 5,
       message: '좋아요.',
       subject: '[패시몬] 엔딩 피드백 ★5',
       botcheck: '',
     });
-    expect(request.email).toBeUndefined();
   });
 
   it('returns a retryable result for network and API failures', async () => {

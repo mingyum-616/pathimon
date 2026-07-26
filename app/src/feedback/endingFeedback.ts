@@ -8,7 +8,7 @@ export type EndingFeedbackSubmitResult =
   | { ok: false; reason: 'invalid-rating' | 'network' | 'server' };
 
 const DRAFT_STORAGE_KEY = 'pathimon-ending-feedback-draft-v1';
-const WEB3FORMS_ACCESS_KEY = import.meta.env.VITE_WEB3FORMS_ACCESS_KEY ?? '';
+const WEB3FORMS_ACCESS_KEY = 'abf86e09-9622-4783-82f8-4e82976b2c26';
 const EMPTY_DRAFT: EndingFeedbackDraft = { rating: 0, message: '' };
 
 export function loadEndingFeedbackDraft(storage?: Storage): EndingFeedbackDraft {
