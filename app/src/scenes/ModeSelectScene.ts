@@ -17,7 +17,7 @@ import { keyboardCommand } from '../ui/keyboard';
 const SELECTED_FILL = 0x4a405d;
 const ACTIVE_LINE = 0x72d6ff;
 const MODE_BUTTON_WIDTH = 350;
-const MODE_BUTTON_HEIGHT = 116;
+const MODE_BUTTON_HEIGHT = 132;
 const STYLE_BUTTON_WIDTH = MODE_BUTTON_WIDTH;
 const STYLE_BUTTON_HEIGHT = 54;
 
@@ -82,10 +82,10 @@ export class ModeSelectScene extends Phaser.Scene {
     applySelectionStyle(rect, { focused, selected }, { idle: COLORS.panelDark, selected: SELECTED_FILL });
     this.configureButton(rect, option, index);
 
-    this.add.rectangle(x + 16, y + 18, 5, 80, selected ? COLORS.selected : COLORS.borderStrong, 0.92).setOrigin(0);
+    this.add.rectangle(x + 16, y + 18, 5, 96, selected ? COLORS.selected : COLORS.borderStrong, 0.92).setOrigin(0);
     addLabel(this, x + 38, y + 16, option.label, TEXT.title).setWordWrapWidth(MODE_BUTTON_WIDTH - 128);
     option.lines.forEach((line, lineIndex) =>
-      addLabel(this, x + 38, y + 56 + lineIndex * 21, line, TEXT.label)
+      addLabel(this, x + 38, y + 58 + lineIndex * 23, line, TEXT.label)
         .setWordWrapWidth(MODE_BUTTON_WIDTH - 64),
     );
     if (selected) addSelectedBadge(this, x + MODE_BUTTON_WIDTH - 92, y + 14);

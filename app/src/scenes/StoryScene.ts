@@ -70,11 +70,14 @@ export class StoryScene extends Phaser.Scene {
       this.add.circle(APP_WIDTH / 2 + 132, centerY, 48, 0xcf5b7a, 0.42);
     }
 
-    drawPanel(this, 88, 398, 848, 116).setAlpha(0.96);
-    page.lines.forEach((line, index) => {
-      addLabel(this, 124, 420 + index * 40, line, TEXT.heading)
-        .setWordWrapWidth(776)
-        .setLineSpacing(7);
+    drawPanel(this, 88, 398, 848, 124).setAlpha(0.96);
+    // 문장 길이가 제각각이라 고정 간격 대신 각 줄 높이를 누적해 배치한다.
+    let lineY = 414;
+    page.lines.forEach((line) => {
+      const label = addLabel(this, 124, lineY, line, TEXT.heading)
+        .setWordWrapWidth(792)
+        .setLineSpacing(6);
+      lineY += label.height + 8;
     });
 
     this.createSkipButton();
