@@ -2,6 +2,7 @@
 app/node_modules/
 app/dist/
 .superpowers/
+.worktrees/
 pokerogue-beta/
 
 # Local project-organizer archive
