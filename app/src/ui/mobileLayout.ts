@@ -51,18 +51,26 @@ export function mountMobileLayout(game: Phaser.Game): () => void {
 
   const canvas = game.canvas;
   const initialPointerEvents = canvas.style.pointerEvents;
+  let blockKeyboardInput = false;
+  const handleKeyDown = (event: KeyboardEvent): void => {
+    if (!blockKeyboardInput) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
   const syncLayout = (): void => {
     const showOverlay = shouldShowRotateOverlay(
       touchCapabilitySignals(),
       window.innerWidth,
       window.innerHeight,
     );
+    blockKeyboardInput = showOverlay;
     overlay.style.display = showOverlay ? 'flex' : 'none';
     overlay.style.pointerEvents = showOverlay ? 'auto' : 'none';
     canvas.style.pointerEvents = showOverlay ? 'none' : initialPointerEvents;
   };
 
   syncLayout();
+  window.addEventListener('keydown', handleKeyDown, true);
   window.addEventListener('resize', syncLayout);
   window.addEventListener('orientationchange', syncLayout);
 
@@ -72,6 +80,8 @@ export function mountMobileLayout(game: Phaser.Game): () => void {
   }
 
   return () => {
+    blockKeyboardInput = false;
+    window.removeEventListener('keydown', handleKeyDown, true);
     window.removeEventListener('resize', syncLayout);
     window.removeEventListener('orientationchange', syncLayout);
     canvas.style.pointerEvents = initialPointerEvents;

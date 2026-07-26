@@ -60,4 +60,53 @@ describe('mobile layout', () => {
     expect(document.querySelector('[role="status"]')).toBeNull();
     expect(canvas.style.pointerEvents).toBe('');
   });
+
+  it('blocks hardware keyboard controls while portrait guidance is visible', () => {
+    const originalMatchMedia = window.matchMedia;
+    const width = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    const height = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+    const touchPoints = Object.getOwnPropertyDescriptor(navigator, 'maxTouchPoints');
+    const orientation = Object.getOwnPropertyDescriptor(screen, 'orientation');
+    const canvas = document.createElement('canvas');
+    const gameKeyHandler = vi.fn();
+
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn(() => ({ matches: false })),
+    });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 844 });
+    Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, value: 1 });
+    Object.defineProperty(screen, 'orientation', { configurable: true, value: undefined });
+    window.addEventListener('keydown', gameKeyHandler);
+
+    const cleanup = mountMobileLayout({ canvas } as Phaser.Game);
+    const blockedEvent = new KeyboardEvent('keydown', {
+      cancelable: true,
+      key: 'Enter',
+    });
+    window.dispatchEvent(blockedEvent);
+
+    expect(blockedEvent.defaultPrevented).toBe(true);
+    expect(gameKeyHandler).not.toHaveBeenCalled();
+
+    cleanup();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(gameKeyHandler).toHaveBeenCalledTimes(1);
+
+    window.removeEventListener('keydown', gameKeyHandler);
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: originalMatchMedia });
+    Object.defineProperty(window, 'innerWidth', width!);
+    Object.defineProperty(window, 'innerHeight', height!);
+    if (touchPoints) {
+      Object.defineProperty(navigator, 'maxTouchPoints', touchPoints);
+    } else {
+      Reflect.deleteProperty(navigator, 'maxTouchPoints');
+    }
+    if (orientation) {
+      Object.defineProperty(screen, 'orientation', orientation);
+    } else {
+      Reflect.deleteProperty(screen, 'orientation');
+    }
+  });
 });

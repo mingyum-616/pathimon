@@ -4,6 +4,7 @@ const TEXTAREA_X = 128;
 const TEXTAREA_Y = 224;
 const TEXTAREA_WIDTH = 768;
 const TEXTAREA_HEIGHT = 128;
+const VIEWPORT_MARGIN = 8;
 
 export interface EndingFeedbackTextareaHandle {
   focus(): void;
@@ -43,10 +44,44 @@ export function mountEndingFeedbackTextarea(options: {
     const rect = options.canvas.getBoundingClientRect();
     const scaleX = rect.width / CANVAS_WIDTH;
     const scaleY = rect.height / CANVAS_HEIGHT;
-    textarea.style.left = `${rect.left + TEXTAREA_X * scaleX}px`;
-    textarea.style.top = `${rect.top + TEXTAREA_Y * scaleY}px`;
-    textarea.style.width = `${TEXTAREA_WIDTH * scaleX}px`;
-    textarea.style.height = `${TEXTAREA_HEIGHT * scaleY}px`;
+    const desiredLeft = rect.left + TEXTAREA_X * scaleX;
+    const desiredTop = rect.top + TEXTAREA_Y * scaleY;
+    const desiredWidth = TEXTAREA_WIDTH * scaleX;
+    const desiredHeight = TEXTAREA_HEIGHT * scaleY;
+    const viewport = window.visualViewport;
+    const hasViewportGeometry = viewport
+      && Number.isFinite(viewport.width)
+      && Number.isFinite(viewport.height)
+      && Number.isFinite(viewport.offsetLeft)
+      && Number.isFinite(viewport.offsetTop);
+
+    let left = desiredLeft;
+    let top = desiredTop;
+    let width = desiredWidth;
+    let height = desiredHeight;
+    if (hasViewportGeometry) {
+      const viewportLeft = viewport.offsetLeft;
+      const viewportTop = viewport.offsetTop;
+      const maxWidth = Math.max(0, viewport.width - VIEWPORT_MARGIN * 2);
+      const maxHeight = Math.max(0, viewport.height - VIEWPORT_MARGIN * 2);
+      width = Math.min(desiredWidth, maxWidth);
+      height = Math.min(desiredHeight, maxHeight);
+      left = clamp(
+        desiredLeft,
+        viewportLeft + VIEWPORT_MARGIN,
+        viewportLeft + viewport.width - VIEWPORT_MARGIN - width,
+      );
+      top = clamp(
+        desiredTop,
+        viewportTop + VIEWPORT_MARGIN,
+        viewportTop + viewport.height - VIEWPORT_MARGIN - height,
+      );
+    }
+
+    textarea.style.left = `${left}px`;
+    textarea.style.top = `${top}px`;
+    textarea.style.width = `${width}px`;
+    textarea.style.height = `${height}px`;
     textarea.style.fontSize = `${Math.max(12, 16 * Math.min(scaleX, scaleY))}px`;
   };
   const handleInput = (): void => options.onInput(textarea.value);
@@ -69,6 +104,7 @@ export function mountEndingFeedbackTextarea(options: {
   window.addEventListener('resize', syncLayout);
   window.addEventListener('orientationchange', syncLayout);
   visualViewport?.addEventListener('resize', syncLayout);
+  visualViewport?.addEventListener('scroll', syncLayout);
 
   return {
     focus(): void {
@@ -92,7 +128,12 @@ export function mountEndingFeedbackTextarea(options: {
       window.removeEventListener('resize', syncLayout);
       window.removeEventListener('orientationchange', syncLayout);
       visualViewport?.removeEventListener('resize', syncLayout);
+      visualViewport?.removeEventListener('scroll', syncLayout);
       textarea.remove();
     },
   };
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
 }

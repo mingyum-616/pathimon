@@ -7,8 +7,14 @@ export type EndingFeedbackSubmitResult =
   | { ok: true }
   | { ok: false; reason: 'invalid-rating' | 'network' | 'server' };
 
+export interface EndingFeedbackSubmitOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
 const DRAFT_STORAGE_KEY = 'pathimon-ending-feedback-draft-v1';
 const WEB3FORMS_ACCESS_KEY = 'abf86e09-9622-4783-82f8-4e82976b2c26';
+const DEFAULT_SUBMISSION_TIMEOUT_MS = 10_000;
 const EMPTY_DRAFT: EndingFeedbackDraft = { rating: 0, message: '' };
 
 export function loadEndingFeedbackDraft(storage?: Storage): EndingFeedbackDraft {
@@ -57,14 +63,25 @@ export function clearEndingFeedbackDraft(storage?: Storage): void {
 export async function submitEndingFeedback(
   draft: EndingFeedbackDraft,
   fetchImpl: typeof fetch = fetch,
+  options: EndingFeedbackSubmitOptions = {},
 ): Promise<EndingFeedbackSubmitResult> {
   if (!isValidRating(draft.rating)) {
     return { ok: false, reason: 'invalid-rating' };
   }
 
-  let response: Response;
+  const requestController = new AbortController();
+  const abortRequest = (): void => requestController.abort();
+  const timeoutId = globalThis.setTimeout(
+    abortRequest,
+    Math.max(0, options.timeoutMs ?? DEFAULT_SUBMISSION_TIMEOUT_MS),
+  );
+  options.signal?.addEventListener('abort', abortRequest, { once: true });
+  if (options.signal?.aborted) {
+    abortRequest();
+  }
+
   try {
-    response = await fetchImpl('https://api.web3forms.com/submit', {
+    const response = await fetchImpl('https://api.web3forms.com/submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -74,18 +91,31 @@ export async function submitEndingFeedback(
         message: draft.message,
         botcheck: '',
       }),
+      signal: requestController.signal,
     });
-  } catch {
-    return { ok: false, reason: 'network' };
-  }
+    if (requestController.signal.aborted) {
+      return { ok: false, reason: 'network' };
+    }
 
-  try {
-    const body = await response.json() as { success?: boolean };
+    let body: { success?: boolean };
+    try {
+      body = await response.json() as { success?: boolean };
+    } catch {
+      return requestController.signal.aborted
+        ? { ok: false, reason: 'network' }
+        : { ok: false, reason: 'server' };
+    }
+    if (requestController.signal.aborted) {
+      return { ok: false, reason: 'network' };
+    }
     return response.ok && body.success === true
       ? { ok: true }
       : { ok: false, reason: 'server' };
   } catch {
-    return { ok: false, reason: 'server' };
+    return { ok: false, reason: 'network' };
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+    options.signal?.removeEventListener('abort', abortRequest);
   }
 }
 

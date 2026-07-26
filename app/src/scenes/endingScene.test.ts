@@ -27,4 +27,10 @@ describe('EndingScene', () => {
     expect(endingSceneSource).toContain('Phaser.Scenes.Events.DESTROY, this.cleanup, this');
     expect(endingSceneSource).toContain('this.events.off(Phaser.Scenes.Events.DESTROY, this.cleanup, this)');
   });
+
+  it('owns and aborts the active feedback request during scene cleanup', () => {
+    expect(endingSceneSource).toContain('new AbortController()');
+    expect(endingSceneSource).toContain('signal: controller.signal');
+    expect(endingSceneSource).toContain('this.feedbackAbortController?.abort()');
+  });
 });

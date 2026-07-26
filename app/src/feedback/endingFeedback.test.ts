@@ -73,6 +73,99 @@ describe('ending feedback', () => {
 
     expect(fetchImpl).not.toHaveBeenCalled();
   });
+
+  it('aborts a timed-out Web3Forms request and returns a network failure', async () => {
+    vi.useFakeTimers();
+    let requestSignal: AbortSignal | undefined;
+    const fetchImpl = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      requestSignal = init?.signal ?? undefined;
+      if (!requestSignal) {
+        return Promise.resolve({
+          ok: false,
+          json: async () => ({ success: false }),
+        });
+      }
+      return new Promise<Response>((_resolve, reject) => {
+        requestSignal?.addEventListener('abort', () => {
+          reject(new DOMException('Aborted', 'AbortError'));
+        }, { once: true });
+      });
+    });
+
+    try {
+      const submission = submitEndingFeedback(
+        { rating: 4, message: 'timeout' },
+        fetchImpl as typeof fetch,
+        { timeoutMs: 100 },
+      );
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(requestSignal?.aborted).toBe(true);
+      await expect(submission).resolves.toEqual({ ok: false, reason: 'network' });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a late response classified as a timeout when fetch ignores abort', async () => {
+    vi.useFakeTimers();
+    const fetchImpl = vi.fn(() => new Promise<Response>((resolve) => {
+      setTimeout(() => resolve({
+        ok: true,
+        json: async () => ({ success: true }),
+      } as Response), 150);
+    }));
+
+    try {
+      const submission = submitEndingFeedback(
+        { rating: 4, message: 'late' },
+        fetchImpl as typeof fetch,
+        { timeoutMs: 100 },
+      );
+      await vi.advanceTimersByTimeAsync(150);
+
+      await expect(submission).resolves.toEqual({ ok: false, reason: 'network' });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('allows scene cleanup to abort a request without leaving its timeout behind', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    let requestSignal: AbortSignal | undefined;
+    const fetchImpl = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      requestSignal = init?.signal ?? undefined;
+      if (!requestSignal) {
+        return Promise.resolve({
+          ok: false,
+          json: async () => ({ success: false }),
+        });
+      }
+      return new Promise<Response>((_resolve, reject) => {
+        requestSignal?.addEventListener('abort', () => {
+          reject(new DOMException('Aborted', 'AbortError'));
+        }, { once: true });
+      });
+    });
+
+    try {
+      const submission = submitEndingFeedback(
+        { rating: 4, message: 'cleanup' },
+        fetchImpl as typeof fetch,
+        { signal: controller.signal, timeoutMs: 10_000 },
+      );
+      controller.abort();
+
+      expect(requestSignal?.aborted).toBe(true);
+      await expect(submission).resolves.toEqual({ ok: false, reason: 'network' });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 class MapStorage implements Storage {

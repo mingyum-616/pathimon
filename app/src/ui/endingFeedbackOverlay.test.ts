@@ -67,6 +67,7 @@ describe('ending feedback textarea overlay', () => {
       expect(textarea?.style.width).toBe('600px');
       expect(textarea?.style.height).toBe('100px');
       expect(visualViewport.addEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
+      expect(visualViewport.addEventListener).toHaveBeenCalledWith('scroll', expect.any(Function));
 
       rect = new DOMRect(0, 0, 1024, 576);
       window.dispatchEvent(new Event('resize'));
@@ -82,6 +83,7 @@ describe('ending feedback textarea overlay', () => {
       expect(removeListener).toHaveBeenCalledWith('resize', expect.any(Function));
       expect(removeListener).toHaveBeenCalledWith('orientationchange', expect.any(Function));
       expect(visualViewport.removeEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
+      expect(visualViewport.removeEventListener).toHaveBeenCalledWith('scroll', expect.any(Function));
     } finally {
       if (originalVisualViewport) {
         Object.defineProperty(window, 'visualViewport', originalVisualViewport);
@@ -101,5 +103,59 @@ describe('ending feedback textarea overlay', () => {
 
     handle.setDisabled(false);
     expect(textarea?.disabled).toBe(false);
+  });
+
+  it('uses visual viewport geometry to stay above a landscape mobile keyboard', () => {
+    const viewportGeometry = {
+      height: 576,
+      offsetLeft: 0,
+      offsetTop: 0,
+      width: 1024,
+    };
+    const visualViewport = new EventTarget() as VisualViewport;
+    Object.defineProperties(visualViewport, {
+      height: { configurable: true, get: () => viewportGeometry.height },
+      offsetLeft: { configurable: true, get: () => viewportGeometry.offsetLeft },
+      offsetTop: { configurable: true, get: () => viewportGeometry.offsetTop },
+      width: { configurable: true, get: () => viewportGeometry.width },
+    });
+    const originalVisualViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport');
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: visualViewport,
+    });
+
+    try {
+      const canvas = canvasWithRect(() => new DOMRect(0, 0, 1024, 576));
+      const handle = mountEndingFeedbackTextarea({ canvas, value: '', onInput: vi.fn() });
+      const textarea = document.querySelector<HTMLTextAreaElement>('textarea');
+
+      expect(textarea?.style.left).toBe('128px');
+      expect(textarea?.style.top).toBe('224px');
+
+      viewportGeometry.width = 700;
+      viewportGeometry.height = 300;
+      viewportGeometry.offsetLeft = 20;
+      viewportGeometry.offsetTop = 10;
+      visualViewport.dispatchEvent(new Event('resize'));
+
+      expect(textarea?.style.left).toBe('28px');
+      expect(textarea?.style.top).toBe('174px');
+      expect(textarea?.style.width).toBe('684px');
+      expect(textarea?.style.height).toBe('128px');
+
+      viewportGeometry.offsetTop = 30;
+      visualViewport.dispatchEvent(new Event('scroll'));
+
+      expect(textarea?.style.top).toBe('194px');
+
+      handle.destroy();
+    } finally {
+      if (originalVisualViewport) {
+        Object.defineProperty(window, 'visualViewport', originalVisualViewport);
+      } else {
+        Reflect.deleteProperty(window, 'visualViewport');
+      }
+    }
   });
 });

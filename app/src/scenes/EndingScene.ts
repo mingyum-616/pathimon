@@ -51,6 +51,7 @@ export class EndingScene extends Phaser.Scene {
   private feedbackNotice?: string;
   private submitting = false;
   private submission = new EndingFeedbackSubmissionEpoch();
+  private feedbackAbortController?: AbortController;
   private cleanedUp = false;
 
   constructor() {
@@ -75,6 +76,7 @@ export class EndingScene extends Phaser.Scene {
     this.feedbackButton = 'send';
     this.feedbackNotice = undefined;
     this.submitting = false;
+    this.feedbackAbortController = undefined;
     this.cleanedUp = false;
   }
 
@@ -414,10 +416,17 @@ export class EndingScene extends Phaser.Scene {
       return;
     }
 
+    const controller = new AbortController();
+    this.feedbackAbortController = controller;
     this.submitting = true;
     const request = this.submission.begin();
     this.render();
-    const result = await submitEndingFeedback(draft);
+    const result = await submitEndingFeedback(draft, fetch, {
+      signal: controller.signal,
+    });
+    if (this.feedbackAbortController === controller) {
+      this.feedbackAbortController = undefined;
+    }
     if (this.cleanedUp || !this.submission.isCurrent(request)) return;
 
     this.submitting = false;
@@ -435,17 +444,23 @@ export class EndingScene extends Phaser.Scene {
   }
 
   private skipFeedback(): void {
-    this.submission.invalidate();
-    this.submitting = false;
+    this.cancelFeedbackSubmission();
     clearEndingFeedbackDraft();
     this.destroyTextarea();
     this.scene.start('TitleScene');
   }
 
   private returnToTitle(): void {
-    this.submission.invalidate();
+    this.cancelFeedbackSubmission();
     this.destroyTextarea();
     this.scene.start('TitleScene');
+  }
+
+  private cancelFeedbackSubmission(): void {
+    this.feedbackAbortController?.abort();
+    this.feedbackAbortController = undefined;
+    this.submission.invalidate();
+    this.submitting = false;
   }
 
   private destroyTextarea(): void {
@@ -456,8 +471,7 @@ export class EndingScene extends Phaser.Scene {
   private cleanup(): void {
     if (this.cleanedUp) return;
     this.cleanedUp = true;
-    this.submission.invalidate();
-    this.submitting = false;
+    this.cancelFeedbackSubmission();
     this.stopTyping();
     this.input.off('pointerdown', this.handleScenePointerDown, this);
     this.input.keyboard?.off('keydown', this.handleKeyboardDown);

@@ -27,4 +27,13 @@ describe('PWA application shell', () => {
     expect(viteConfigSource).toContain("globIgnores: ['audio/**/*', 'video/**/*', 'videos/**/*', 'images/**/*']");
     expect(viteConfigSource).toContain("navigateFallback: 'index.html'");
   });
+
+  it('gives the Phaser parent a definite full viewport while retaining safe-area padding', () => {
+    const htmlRule = indexHtml.match(/html\s*\{([^}]*)\}/s)?.[1] ?? '';
+
+    expect(htmlRule).toContain('height: 100%');
+    expect(htmlRule).toContain('width: 100%');
+    expect(indexHtml).toContain('env(safe-area-inset-top)');
+    expect(indexHtml).toContain('env(safe-area-inset-left)');
+  });
 });
