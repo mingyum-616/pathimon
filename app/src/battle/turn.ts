@@ -14,7 +14,7 @@ import {
 } from '../data/statusConditions';
 import { TAG_LABELS } from '../data/labels';
 import { MOVES } from '../data/moves';
-import { MONSTERS } from '../data/monsters';
+import { MONSTERS, TOTAL_FLOORS } from '../data/monsters';
 import { interpolatePathimonName, withParticle } from '../game/text';
 import {
   conciseLearningFeedback,
@@ -24,7 +24,7 @@ import {
 import { createMonsterInstance } from '../state/factory';
 import { bossMoveEffectiveness, chooseBossMove, chooseEffectiveBossMove, createBossDefenseProfile } from './bossMatchup';
 import { advanceStagedMove, currentMoveData, resolveMoveOutcome } from './moveStages';
-import type { AbilityId, CapsuleId, HitEffectiveness, MoveData, MoveId, RunState, RuntimeMonster } from '../types/game';
+import type { AbilityId, BattlePhase, CapsuleId, HitEffectiveness, MoveData, MoveId, RunState, RuntimeMonster } from '../types/game';
 
 const WIN_REWARD = 5;
 const MAX_PARTY_SIZE = 6;
@@ -208,7 +208,13 @@ function floorClearLog(state: RunState, message: string, detail?: string): strin
 
 function setWinState(state: RunState, message: string, _learningDetail?: string, resultDetail?: string): RunState {
   const isHumanEncounter = state.encounterKind === 'trainer' || state.encounterKind === 'boss';
-  const shouldOpenShop = state.mode === 'challenge' && isHumanEncounter;
+  const isFinalFloor = state.floor >= TOTAL_FLOORS;
+  const shouldOpenShop = !isFinalFloor && state.mode === 'challenge' && isHumanEncounter;
+  const phase: BattlePhase = isFinalFloor
+    ? 'ending'
+    : shouldOpenShop
+      ? 'shop'
+      : 'floorClear';
   const shouldHealLearningParty = state.mode === 'learning' && isHumanEncounter;
   const reward = shouldOpenShop ? WIN_REWARD : 0;
   const detail = resultDetail
@@ -224,7 +230,7 @@ function setWinState(state: RunState, message: string, _learningDetail?: string,
     ...state,
     money: state.money + reward,
     party,
-    phase: shouldOpenShop ? 'shop' : 'floorClear',
+    phase,
     lastLog: shouldOpenShop ? maintenanceVictoryLog(state, reward) : battleResultLog,
     battleResultLog,
     shopInventory: shouldOpenShop ? createMaintenanceInventory(state.floor) : undefined,

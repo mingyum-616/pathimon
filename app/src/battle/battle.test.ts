@@ -641,6 +641,32 @@ describe('battle engine', () => {
     expect(result.party[0].usedSignatureMoveIds).toEqual([]);
   });
 
+  it.each(['learning', 'challenge'] as const)(
+    'enters the ending instead of maintenance after floor 100 in %s mode',
+    (mode) => {
+      const result = resolvePlayerMove(createBattleState({
+        floor: 100,
+        mode,
+        encounterKind: 'boss',
+        enemy: createMonster({ hp: 1, maxHp: 100, isBoss: true, isTrainer: true }),
+      }), 'hyaluronidase', 1, 0, 0);
+
+      expect(result.phase).toBe('ending');
+      expect(result.shopInventory).toBeUndefined();
+    },
+  );
+
+  it('opens the maintenance shop after a floor-90 challenge boss victory', () => {
+    const result = resolvePlayerMove(createBattleState({
+      floor: 90,
+      mode: 'challenge',
+      encounterKind: 'boss',
+      enemy: createMonster({ hp: 1, maxHp: 100, isBoss: true, isTrainer: true }),
+    }), 'hyaluronidase', 1, 0, 0);
+
+    expect(result.phase).toBe('shop');
+  });
+
   it('keeps boss defeat dialogue out of the maintenance shop log', () => {
     const battle = createBattleState({
       enemy: createMonster({

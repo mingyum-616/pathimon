@@ -403,6 +403,7 @@ export type BattlePhase =
   | 'battle'
   | 'shop'
   | 'floorClear'
+  | 'ending'
   | 'forcedSwitch'
   | 'releaseCapture'
   | 'bossIntro'
