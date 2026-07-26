@@ -12,6 +12,7 @@ import {
   mountEndingFeedbackTextarea,
   type EndingFeedbackTextareaHandle,
 } from '../ui/endingFeedbackOverlay';
+import { EndingFeedbackSubmissionEpoch } from '../ui/endingFeedbackSubmission';
 import { ENDING_PAGES, endingRosterEntries, type EndingRosterEntry } from '../ui/endingUi';
 import { keyboardCommand } from '../ui/keyboard';
 import { advanceTypewriter } from '../ui/typewriter';
@@ -49,6 +50,7 @@ export class EndingScene extends Phaser.Scene {
   private feedbackButton: FeedbackButton = 'send';
   private feedbackNotice?: string;
   private submitting = false;
+  private submission = new EndingFeedbackSubmissionEpoch();
   private cleanedUp = false;
 
   constructor() {
@@ -161,11 +163,16 @@ export class EndingScene extends Phaser.Scene {
       const x = startX + gap * index;
       if (this.textures.exists(entry.assetPath)) {
         const frame = this.textures.getFrame(entry.assetPath);
+        const crop = entry.spriteCrop;
         const scale = Math.min(
-          106 / Math.max(1, frame?.width ?? 96),
-          106 / Math.max(1, frame?.height ?? 96),
+          106 / Math.max(1, crop?.width ?? frame?.width ?? 96),
+          106 / Math.max(1, crop?.height ?? frame?.height ?? 96),
         );
-        this.add.image(x, 248, entry.assetPath).setScale(scale);
+        const sprite = this.add.image(x, 248, entry.assetPath);
+        if (crop) {
+          sprite.setCrop(crop.frontX, 0, crop.width, crop.height);
+        }
+        sprite.setScale(scale);
       } else {
         this.add.circle(x, 248, 42, COLORS.panelDark).setStrokeStyle(2, COLORS.border);
       }
@@ -201,8 +208,10 @@ export class EndingScene extends Phaser.Scene {
       const star = addLabel(this, STAR_X + STAR_GAP * index, 106, selected ? '★' : '☆', 42)
         .setOrigin(0.5)
         .setColor(selected ? '#ffd56a' : '#d8cde6');
-      star.setInteractive({ useHandCursor: true });
-      star.on('pointerdown', () => this.selectRating(index + 1));
+      if (!this.submitting) {
+        star.setInteractive({ useHandCursor: true });
+        star.on('pointerdown', () => this.selectRating(index + 1));
+      }
     }
     addLabel(this, APP_WIDTH / 2, 166, `${this.draft.rating}/5`, TEXT.label)
       .setOrigin(0.5)
@@ -213,11 +222,13 @@ export class EndingScene extends Phaser.Scene {
         canvas: this.sys.game.canvas,
         value: this.draft.message,
         onInput: (message) => {
+          if (this.submitting) return;
           this.draft = { ...this.draft, message };
           saveEndingFeedbackDraft(this.draft);
         },
       });
     }
+    this.textarea?.setDisabled(this.submitting);
 
     if (this.feedbackNotice) {
       addBoxLabel(this, 136, 368, this.feedbackNotice, {
@@ -233,7 +244,7 @@ export class EndingScene extends Phaser.Scene {
 
     const sendDisabled = this.draft.rating <= 0 || this.submitting;
     this.drawFeedbackButton(216, 456, 280, 52, this.feedbackNotice ? '다시 보내기' : '보내기', 'send', sendDisabled);
-    this.drawFeedbackButton(528, 456, 280, 52, '건너뛰기', 'skip', this.submitting);
+    this.drawFeedbackButton(528, 456, 280, 52, '건너뛰기', 'skip', false);
   }
 
   private drawFeedbackButton(
@@ -376,6 +387,7 @@ export class EndingScene extends Phaser.Scene {
   }
 
   private selectRating(rating: number): void {
+    if (this.submitting) return;
     const nextRating = Math.min(5, Math.max(0, rating));
     if (nextRating === this.draft.rating) return;
     this.draft = { ...this.draft, rating: nextRating };
@@ -394,7 +406,8 @@ export class EndingScene extends Phaser.Scene {
   private async sendFeedback(): Promise<void> {
     if (this.draft.rating <= 0 || this.submitting) return;
 
-    saveEndingFeedbackDraft(this.draft);
+    const draft = { ...this.draft };
+    saveEndingFeedbackDraft(draft);
     if (navigator.onLine === false) {
       this.feedbackNotice = RETRY_MESSAGE;
       this.render();
@@ -402,9 +415,10 @@ export class EndingScene extends Phaser.Scene {
     }
 
     this.submitting = true;
+    const request = this.submission.begin();
     this.render();
-    const result = await submitEndingFeedback(this.draft);
-    if (this.cleanedUp) return;
+    const result = await submitEndingFeedback(draft);
+    if (this.cleanedUp || !this.submission.isCurrent(request)) return;
 
     this.submitting = false;
     if (result.ok) {
@@ -421,13 +435,15 @@ export class EndingScene extends Phaser.Scene {
   }
 
   private skipFeedback(): void {
-    if (this.submitting) return;
+    this.submission.invalidate();
+    this.submitting = false;
     clearEndingFeedbackDraft();
     this.destroyTextarea();
     this.scene.start('TitleScene');
   }
 
   private returnToTitle(): void {
+    this.submission.invalidate();
     this.destroyTextarea();
     this.scene.start('TitleScene');
   }
@@ -440,9 +456,13 @@ export class EndingScene extends Phaser.Scene {
   private cleanup(): void {
     if (this.cleanedUp) return;
     this.cleanedUp = true;
+    this.submission.invalidate();
+    this.submitting = false;
     this.stopTyping();
     this.input.off('pointerdown', this.handleScenePointerDown, this);
     this.input.keyboard?.off('keydown', this.handleKeyboardDown);
+    this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
+    this.events.off(Phaser.Scenes.Events.DESTROY, this.cleanup, this);
     this.destroyTextarea();
   }
 }

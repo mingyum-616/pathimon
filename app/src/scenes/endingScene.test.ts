@@ -18,4 +18,13 @@ describe('EndingScene', () => {
     expect(endingSceneSource).toContain('this.isFeedbackTextareaFocused()');
     expect(endingSceneSource).toContain('data-ending-feedback-textarea');
   });
+
+  it('uses cropped front sprites and keeps Skip safe while a request is in flight', () => {
+    expect(endingSceneSource).toContain('sprite.setCrop(');
+    expect(endingSceneSource).toContain('this.textarea?.setDisabled(this.submitting)');
+    expect(endingSceneSource).toContain('this.submission.invalidate()');
+    expect(endingSceneSource).toContain("'건너뛰기', 'skip', false");
+    expect(endingSceneSource).toContain('Phaser.Scenes.Events.DESTROY, this.cleanup, this');
+    expect(endingSceneSource).toContain('this.events.off(Phaser.Scenes.Events.DESTROY, this.cleanup, this)');
+  });
 });

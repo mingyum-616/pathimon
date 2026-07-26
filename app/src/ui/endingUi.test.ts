@@ -55,6 +55,24 @@ describe('ending UI data', () => {
     });
   });
 
+  it('keeps the front crop for a two-view party sprite', () => {
+    const spriteCrop = {
+      frontX: 64,
+      backX: 0,
+      width: 64,
+      height: 64,
+    };
+    const party = [createMonster({
+      assetPath: 'images/pathimon/two-view.png',
+      spriteCrop,
+    })];
+
+    expect(endingRosterEntries({ party, visualStyle: 'character' })[0]).toMatchObject({
+      assetPath: 'images/pathimon/two-view.png',
+      spriteCrop,
+    });
+  });
+
   it('contains the approved ending copy', () => {
     expect(ENDING_PAGES.roster).toEqual([
       '고마워. 이제 네 세계로 돌려보내줄게.',

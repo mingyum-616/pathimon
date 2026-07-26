@@ -15,6 +15,7 @@ export const ENDING_PAGES = {
 export interface EndingRosterEntry {
   name: string;
   assetPath: string;
+  spriteCrop?: RuntimeMonster['spriteCrop'];
 }
 
 export function endingRosterEntries(input: {
@@ -26,5 +27,6 @@ export function endingRosterEntries(input: {
     assetPath: monster.sealedByBoss && monster.assetPath
       ? monster.assetPath
       : pathimonSpriteAssets(monster, input.visualStyle).front,
+    spriteCrop: monster.spriteCrop,
   }));
 }

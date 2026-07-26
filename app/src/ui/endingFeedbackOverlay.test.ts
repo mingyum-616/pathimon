@@ -90,4 +90,16 @@ describe('ending feedback textarea overlay', () => {
       }
     }
   });
+
+  it('disables and re-enables editing while a feedback submission is in flight', () => {
+    const canvas = canvasWithRect(() => new DOMRect(0, 0, 1024, 576));
+    const handle = mountEndingFeedbackTextarea({ canvas, value: '', onInput: vi.fn() });
+    const textarea = document.querySelector<HTMLTextAreaElement>('textarea');
+
+    handle.setDisabled(true);
+    expect(textarea?.disabled).toBe(true);
+
+    handle.setDisabled(false);
+    expect(textarea?.disabled).toBe(false);
+  });
 });

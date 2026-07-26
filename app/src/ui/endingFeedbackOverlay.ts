@@ -8,6 +8,7 @@ const TEXTAREA_HEIGHT = 128;
 export interface EndingFeedbackTextareaHandle {
   focus(): void;
   setValue(value: string): void;
+  setDisabled(disabled: boolean): void;
   destroy(): void;
 }
 
@@ -75,6 +76,12 @@ export function mountEndingFeedbackTextarea(options: {
     },
     setValue(value: string): void {
       textarea.value = value;
+    },
+    setDisabled(disabled: boolean): void {
+      textarea.disabled = disabled;
+      textarea.setAttribute('aria-disabled', String(disabled));
+      textarea.style.cursor = disabled ? 'wait' : 'text';
+      textarea.style.opacity = disabled ? '0.72' : '1';
     },
     destroy(): void {
       if (destroyed) return;
