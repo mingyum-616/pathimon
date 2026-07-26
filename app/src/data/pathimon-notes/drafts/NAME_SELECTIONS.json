@@ -1320,6 +1320,81 @@
                                               "d":  "태아침입",
                                               "e":  "시엠브이"
                                           }
+                       },
+                       {
+                           "number":  85,
+                           "file":  "protozoa/Entamoeba histolytica.md",
+                           "scientific":  "이질아메바(Entamoeba histolytica)",
+                           "choiceNumber":  1,
+                           "choiceLetter":  "a",
+                           "selectedName":  "플라스크바",
+                           "candidates":  {
+                                              "a":  "플라스크바",
+                                              "b":  "초코농양",
+                                              "c":  "조직녹여",
+                                              "d":  "적혈포식",
+                                              "e":  "이질아메"
+                                          }
+                       },
+                       {
+                           "number":  86,
+                           "file":  "protozoa/Naegleria fowleri.md",
+                           "scientific":  "파울러자유아메바(Naegleria fowleri)",
+                           "choiceNumber":  1,
+                           "choiceLetter":  "a",
+                           "selectedName":  "뇌먹바",
+                           "candidates":  {
+                                              "a":  "뇌먹바",
+                                              "b":  "콧길뇌충",
+                                              "c":  "후각뇌염",
+                                              "d":  "담수뇌충",
+                                              "e":  "급성뇌먹"
+                                          }
+                       },
+                       {
+                           "number":  87,
+                           "file":  "protozoa/Acanthamoeba spp.md",
+                           "scientific":  "가시아메바(Acanthamoeba spp.)",
+                           "choiceNumber":  1,
+                           "choiceLetter":  "a",
+                           "selectedName":  "가시위족",
+                           "candidates":  {
+                                              "a":  "가시위족",
+                                              "b":  "렌즈각막",
+                                              "c":  "별포낭",
+                                              "d":  "만성뇌염",
+                                              "e":  "가시아메"
+                                          }
+                       },
+                       {
+                           "number":  88,
+                           "file":  "protozoa/Balantidium coli.md",
+                           "scientific":  "대장섬모충(Balantidium coli)",
+                           "choiceNumber":  1,
+                           "choiceLetter":  "a",
+                           "selectedName":  "돼지섬모",
+                           "candidates":  {
+                                              "a":  "돼지섬모",
+                                              "b":  "콩팥대핵",
+                                              "c":  "큰섬모충",
+                                              "d":  "대장섬모",
+                                              "e":  "섬모충왕"
+                                          }
+                       },
+                       {
+                           "number":  89,
+                           "file":  "fungus/Pneumocystis jirovecii.md",
+                           "scientific":  "폐포자충(Pneumocystis jirovecii)",
+                           "choiceNumber":  1,
+                           "choiceLetter":  "a",
+                           "selectedName":  "폐포지롱",
+                           "candidates":  {
+                                              "a":  "폐포지롱",
+                                              "b":  "거품폐렴",
+                                              "c":  "항원변이",
+                                              "d":  "진균논쟁",
+                                              "e":  "폐포자충"
+                                          }
                        }
                    ]
 }

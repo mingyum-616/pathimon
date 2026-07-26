@@ -181,7 +181,7 @@ describe('Pathimon data', () => {
     // `유레아플라`(57번)는 강의 근거가 없어 `마이코막` 노트의 감별점으로 흡수하며 제외했다.
     // `레트로잠`(31번, HIV), `가드네라`(58번), `노카가지`(59번)는 승격을 취소했다.
     // 레트로잠은 강의 미도착, 가드네라는 강의 근거 부족, 노카가지는 사용자 보류 결정에 따른다.
-    expect(NOTE_MONSTERS).toHaveLength(80);
+    expect(NOTE_MONSTERS).toHaveLength(85);
     expect(NOTE_MONSTERS.map((monster) => monster.name).slice(0, 5)).toEqual([
       '탄저록스',
       '세레우톡스',
@@ -194,7 +194,9 @@ describe('Pathimon data', () => {
     // `pathimonNoteData.ts`의 createParasiteEvolutionMonsters가 기생충 노트를 무조건 유충/성충으로 쪼개면서
     // 이름에 `-유충`을 붙인다. 노트의 `진화: 패턴 B`(사람 안에서 성충이 되지 못함)와 어긋나는 지점이라 재검토 대상이다.
     expect(NOTE_MONSTERS[72]?.name).toBe('기어가기-유충');
-    expect(NOTE_MONSTERS[NOTE_MONSTERS.length - 1]?.name).toBe('선천빅');
+    // 85~89번: 55강(이질아메바·파울러자유아메바·가시아메바) + 61강(대장섬모충·폐포자충) 신규 5종을 selections 끝에 이어 붙였다.
+    // 폐포자충(폐포지롱)은 로스터 최초의 진균이자 마지막 selection이라 꼬리 앵커가 여기로 바뀐다.
+    expect(NOTE_MONSTERS[NOTE_MONSTERS.length - 1]?.name).toBe('폐포지롱');
   });
 
   it('keeps generation source sheets out of public runtime assets', () => {
@@ -362,6 +364,7 @@ describe('Pathimon data', () => {
     'ascaris', // 빙글회충. v1 `대형저항`은 크기일 뿐 회피가 아니다. 26강이 회충의 회피 구조를 다루지 않는다 (id는 NOTE_OPTION_OVERRIDES가 지정)
     'corynebacterium_diphtheriae', // 디프막스. v1 `위막장벽`은 VOCAB §2-6이 병인 산물로 분류해 공격기로 이관했다. 24강이 회피 구조를 다루지 않는다
     'schistosoma', // 달팽혈충 (id는 NOTE_OPTION_OVERRIDES가 지정). v1 `항원위장`은 38·30강 어디에도 없다. 14강이 숙주 항원 가장을 기생충 일반 기전으로만 가르치고 종을 지목하지 않는다
+    'naegleria_fowleri', // 뇌먹아메바. 55강이 못 박은 대로 위협은 은신·약제저항이 아니라 속도다 — 암포테리신 B는 듣지만 급성 경과·진단 지연으로 진다. 회피 구조 없는 유리대포로 설계했다
   ];
 
   it('does not leave selected first-wave notes with an accidental empty defense trait', () => {
@@ -409,7 +412,7 @@ describe('Pathimon data', () => {
       'ascaris',
       'schistosoma',
     ]));
-    expect(NOTE_MONSTERS).toHaveLength(80);
+    expect(NOTE_MONSTERS).toHaveLength(85);
     expect(monsterIds).not.toContain('hiv');
     expect(monsterIds).not.toContain('gardnerella_vaginalis');
     expect(monsterIds).not.toContain('nocardia_spp');

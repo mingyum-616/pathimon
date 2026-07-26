@@ -225,7 +225,7 @@ describe('run state loop', () => {
     const earlyRoster = roster.slice(0, roster.length - lateSlots);
     const lateRoster = roster.slice(roster.length - lateSlots);
 
-    expect(roster).toHaveLength(80);
+    expect(roster).toHaveLength(85);
     expect(lateSlots).toBe(32);
     expect(earlyRoster.every((monster) => monsterBaseStatTotal(monster) <= EARLY_BAND_MAX_BST)).toBe(true);
     expect(lateRoster.every((monster) => monsterBaseStatTotal(monster) >= LATE_BAND_MIN_BST)).toBe(true);

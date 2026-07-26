@@ -120,6 +120,8 @@ const TAG_BY_NOTE_VALUE: Record<string, TagValue> = {
   효모형: 'fungal',
   균사형: 'fungal_hypha',
   이형성: 'fungal_dimorphic',
+  // 61강(폐포자충) 반영. 진균으로 분류되나 효모형·균사형 어느 쪽도 아니라, 벽 태그를 `fungal`로 직접 받는다.
+  진균: 'fungal',
   // 54강(원충 총론) 반영. `protozoa`는 TagValue·캡슐·라벨에 이미 있었는데 노트 어휘만 비어 있었다.
   원충: 'protozoa',
   편모충: 'protozoa',
