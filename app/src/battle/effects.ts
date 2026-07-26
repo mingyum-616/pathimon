@@ -137,6 +137,27 @@ export function applyEffects(user: RuntimeMonster, enemy: RuntimeMonster, effect
   }
 }
 
+// 혼란: 부여되면 이후 그 몬스터가 행동할 때 확률로 자신을 공격한다(자해). 발동하면 그 턴을 날린다.
+export const CONFUSION_SELF_HIT_CHANCE = 1 / 3;
+const CONFUSION_SELF_DAMAGE_PCT = 0.1; // 최대 체력 10%
+
+export function isConfused(monster: RuntimeMonster): boolean {
+  return monster.effects.some((effect) => effect.kind === 'confusion' && (effect.turns ?? 0) > 0);
+}
+
+// 혼란 자해 판정. 발동 시 최대 체력 %만큼 자기 피해를 입히고 그 값을 반환한다(0 = 미발동).
+// 혼란이 아닐 땐 난수를 뽑지 않는다 — 매 턴 무의미하게 난수열을 밀어 다른 판정(명중·결과)을 흔들지 않도록.
+export function resolveConfusionSelfHit(monster: RuntimeMonster, roll?: number): number {
+  if (monster.hp <= 0 || !isConfused(monster)) {
+    return 0;
+  }
+  if ((roll ?? Math.random()) >= CONFUSION_SELF_HIT_CHANCE) {
+    return 0;
+  }
+  const damage = Math.max(1, Math.round(effectiveMaxHp(monster) * CONFUSION_SELF_DAMAGE_PCT));
+  return dealDamage(monster, damage);
+}
+
 export function applyAttackTriggeredStatusDamage(monster: RuntimeMonster): number {
   const coughStacks = statusConditionStacks(monster, 'cough');
   if (coughStacks <= 0 || monster.hp <= 0) {

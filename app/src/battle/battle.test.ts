@@ -632,7 +632,7 @@ describe('battle engine', () => {
       encounterKind: 'trainer',
     });
 
-    const result = resolvePlayerMove(battle, 'hyaluronidase', 1);
+    const result = resolvePlayerMove(battle, 'hyaluronidase', 1, 0, 0);
 
     expect(result.phase).toBe('shop');
     expect(result.party[0].effects).toEqual([]);
@@ -655,7 +655,7 @@ describe('battle engine', () => {
       }),
     });
 
-    const result = resolvePlayerMove(battle, 'hyaluronidase', 1);
+    const result = resolvePlayerMove(battle, 'hyaluronidase', 1, 0, 0);
 
     expect(result.phase).toBe('shop');
     expect(result.battleResultLog).toContain('대응 체계');
@@ -761,7 +761,7 @@ describe('battle engine', () => {
     expect(challengeResult.battleActionLog).not.toContain('학습 피드백:');
   });
 
-  it('uses visual (12.5%) and hearing (7.5%) abnormality as accuracy penalties', () => {
+  it('uses visual (10%) and hearing (5%) abnormality as accuracy penalties', () => {
     const baseState: RunState = {
       floor: 5,
       bgmSeed: 1,
@@ -798,7 +798,7 @@ describe('battle engine', () => {
       'hyaluronidase',
       1,
       0,
-      0.95,
+      0.93,
     );
     const sensoryMiss = resolvePlayerMove(
       { ...baseState, party: [createMonster({ moveset: ['hyaluronidase'], statusConditions: { blindness: 1, hearing_abnormal: 1 } })] },
@@ -808,9 +808,34 @@ describe('battle engine', () => {
       0.85,
     );
 
+    // 감각이상 없이 기술 자체 명중률(0.95)만으로 빗나감 — 감각 사유 라벨이 붙지 않는다.
+    const baseMiss = resolvePlayerMove(
+      { ...baseState, party: [createMonster({ moveset: ['hyaluronidase'] })] },
+      'hyaluronidase',
+      1,
+      0,
+      0.98,
+    );
+
     expect(visualHit.lastLog).not.toContain('시력 이상으로 빗나갔다');
     expect(hearingMiss.lastLog).toContain('청력 이상으로 빗나갔다');
     expect(sensoryMiss.lastLog).toContain('감각 이상으로 빗나갔다');
+    expect(baseMiss.lastLog).toContain('공격이 빗나갔다');
+    expect(baseMiss.lastLog).not.toContain('이상으로 빗나갔다');
+  });
+
+  it('confused pathimon can hurt itself instead of attacking', () => {
+    const battle = createBattleState({
+      party: [createMonster({ hp: 200, maxHp: 200, moveset: ['hyaluronidase'], effects: [{ kind: 'confusion', turns: 2 }] })],
+    });
+    const spy = vi.spyOn(Math, 'random').mockReturnValue(0.1); // 혼란 자해 발동(<1/3)
+    try {
+      const result = resolvePlayerMove(battle, 'hyaluronidase', 1, 0, 0);
+      expect(result.lastLog).toContain('혼란에 빠져 자신을 공격');
+      expect(result.party[0].hp).toBeLessThan(200);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('lets bosses choose a direct countermeasure move instead of always using the first move', () => {
@@ -866,7 +891,14 @@ describe('battle engine', () => {
       }),
     });
 
-    const result = resolvePlayerMove(battle, 'coagulase', 1, 0, 0);
+    // 적 해열제(m_antipyretic) 명중률이 실제 판정되므로 반격이 확정 명중하도록 난수를 고정한다.
+    const hitSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
+    let result;
+    try {
+      result = resolvePlayerMove(battle, 'coagulase', 1, 0, 0);
+    } finally {
+      hitSpy.mockRestore();
+    }
 
     expect(result.lastLog).toContain('효과가 있다.');
     expect(result.lastLog).not.toContain('효과가 굉장했다.');
@@ -1033,7 +1065,14 @@ describe('battle engine', () => {
     expect(switched.pendingSwitchAttackReward).toBe(true);
     expect(switched.enemy?.plannedMoveIds).toEqual(['m_rx_알벤다졸']);
 
-    const result = resolvePlayerMove(switched, 'coagulase', 1, 0, 1);
+    // 적 기술 명중률(m_rx_알벤다졸 0.86)이 이제 실제 판정되므로, 반격이 확정 명중하도록 난수를 고정한다.
+    const hitSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
+    let result;
+    try {
+      result = resolvePlayerMove(switched, 'coagulase', 1, 0, 1);
+    } finally {
+      hitSpy.mockRestore();
+    }
 
     expect(result.battleActionLog).toContain(`면역챔피언의 ${MOVES['m_rx_알벤다졸'].name}!`);
     expect(result.battleActionLog).not.toContain(`면역챔피언의 ${MOVES.m_interferon.name}!`);
@@ -1156,7 +1195,7 @@ describe('battle engine', () => {
       }),
     });
 
-    const result = resolvePlayerMove(battle, 'enterotoxin', 1, 0, 1);
+    const result = resolvePlayerMove(battle, 'enterotoxin', 1, 0, 0);
 
     expect(result.enemy?.bossPhase2Pending).toBe(true);
     expect(result.enemy?.bossPhase2Activated).toBeFalsy();

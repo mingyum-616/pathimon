@@ -332,7 +332,7 @@ describe('run state loop', () => {
     if (!battle.enemy) throw new Error('enemy missing');
     battle.enemy.hp = 1;
 
-    const result = resolvePlayerMove(battle, 'hyaluronidase', 1);
+    const result = resolvePlayerMove(battle, 'hyaluronidase', 1, 0, 0);
 
     expect(result.phase).toBe('shop');
     expect(result.shopInventory).toHaveLength(6);
@@ -347,7 +347,7 @@ describe('run state loop', () => {
     if (!battle.enemy) throw new Error('enemy missing');
     battle.enemy.hp = 1;
 
-    const result = resolvePlayerMove(battle, 'hyaluronidase', 1);
+    const result = resolvePlayerMove(battle, 'hyaluronidase', 1, 0, 0);
 
     expect(result.phase).toBe('shop');
     expect(result.money).toBe(10);
@@ -360,7 +360,7 @@ describe('run state loop', () => {
     battle.party[0].hp = 1;
     battle.enemy.hp = 1;
 
-    const result = resolvePlayerMove(battle, 'cholera_toxin', 1);
+    const result = resolvePlayerMove(battle, 'cholera_toxin', 1, 0, 0);
 
     expect(result.phase).toBe('floorClear');
     expect(result.party[0].hp).toBe(result.party[0].maxHp);
@@ -375,7 +375,7 @@ describe('run state loop', () => {
     if (!battle.enemy) throw new Error('enemy missing');
     battle.enemy.hp = 1;
 
-    const result = resolvePlayerMove(battle, 'cholera_toxin', 1);
+    const result = resolvePlayerMove(battle, 'cholera_toxin', 1, 0, 0);
 
     expect(result.phase).toBe('shop');
     expect(result.lastLog).toContain('승리 보상 +5원');
@@ -553,7 +553,7 @@ describe('run state loop', () => {
     battle.party[0].maxHp = 999;
     battle.party[0].hp = 999;
 
-    const result = resolvePlayerMove(battle, 'influenza_spread', 1);
+    const result = resolvePlayerMove(battle, 'influenza_spread', 1, 0, 0);
 
     expect(result.lastLog).toContain('학습 피드백');
     expect(result.lastLog).toContain(enemy.scientificName);
@@ -565,7 +565,7 @@ describe('run state loop', () => {
     state.floor = 5;
     const battle = enterBattle(state, 0);
 
-    const result = resolvePlayerMove(battle, 'cholera_toxin', 1);
+    const result = resolvePlayerMove(battle, 'cholera_toxin', 1, 0, 0);
 
     expect(result.enemy?.symptoms).toContain('쌀뜨물 설사');
     expect(result.enemy?.effects.length).toBeGreaterThan(0);
@@ -637,7 +637,7 @@ describe('run state loop', () => {
       const battle = enterBattle({ ...createInitialRunState(), floor: 5 });
       if (!battle.enemy) throw new Error('enemy missing');
 
-      const result = resolvePlayerMove(battle, 'enterotoxin', 1);
+      const result = resolvePlayerMove(battle, 'enterotoxin', 1, 0, 0);
 
       expect(result.enemy?.effects).toContainEqual({ kind: 'confusion', turns: 1 });
     } finally {
@@ -654,7 +654,14 @@ describe('run state loop', () => {
     battle.enemy.plannedMoveIds = ['hiv_cd4'];
     const startingHp = battle.party[0].hp;
 
-    const result = resolvePlayerMove(battle, 'coagulase', 1);
+    // 적 기술 명중률이 실제 판정되므로 반격이 확정 명중하도록 난수를 고정한다.
+    const hitSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
+    let result;
+    try {
+      result = resolvePlayerMove(battle, 'coagulase', 1);
+    } finally {
+      hitSpy.mockRestore();
+    }
 
     expect(result.phase).toBe('battle');
     expect(result.party[0].hp).toBeLessThan(startingHp);
@@ -776,7 +783,14 @@ describe('run state loop', () => {
       secondBattle.enemy.plannedMoveIds = ['hiv_cd4'];
     }
 
-    const result = resolvePlayerMove(secondBattle, 'coagulase', 10);
+    // 적 반격(hiv_cd4)이 확정 명중해 hp=1 패시몬이 쓰러지도록 난수를 고정한다.
+    const hitSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
+    let result;
+    try {
+      result = resolvePlayerMove(secondBattle, 'coagulase', 10);
+    } finally {
+      hitSpy.mockRestore();
+    }
 
     expect(result.phase).toBe('forcedSwitch');
     expect(result.activeIndex).toBe(0);

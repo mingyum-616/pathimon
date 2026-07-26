@@ -1,6 +1,6 @@
 import { tryCapture } from './capture';
 import { calculateDamage, randomDamageVariance, rollsCriticalHit, type DamageResult } from './damage';
-import { applyAttackTriggeredStatusDamage, applyEffects, tickEffects } from './effects';
+import { applyAttackTriggeredStatusDamage, applyEffects, resolveConfusionSelfHit, tickEffects } from './effects';
 import { ABILITIES } from '../data/abilities';
 import { capsuleCanCatch, CAPSULE_LABELS, cloneCapsuleInventory, totalCapsules } from '../data/capsules';
 import { createMaintenanceInventory } from '../data/shop';
@@ -348,9 +348,18 @@ function sensoryMissLabel(actor: RuntimeMonster): string {
   return '시력 이상';
 }
 
-function missesFromSensoryAbnormality(actor: RuntimeMonster, roll = Math.random()): boolean {
-  const hitChance = accuracyMultiplier(actor);
-  return hitChance < 1 && roll >= hitChance;
+// 명중 판정 = 기술 자체 명중률(move.accuracy, 0~1) × 감각이상 배율(시력/청력).
+// null이면 명중, 문자열이면 빗맞은 사유 로그 조각("공격이 …").
+// 기본 명중률에서 이미 빗나갔으면 감각과 무관한 일반 빗맞음으로 본다.
+function attackMissReason(actor: RuntimeMonster, move: MoveData, roll = Math.random()): string | null {
+  const baseHit = Math.max(0, Math.min(1, move.accuracy));
+  const sensory = accuracyMultiplier(actor);
+  const hitChance = baseHit * sensory;
+  // 명중률 100%(감각이상 없음)면 절대 빗나가지 않는다 — roll 경계(1)에서도 명중.
+  if (hitChance >= 1 || roll < hitChance) return null;
+  // 기본 명중률에서 이미 빗나갔으면 감각과 무관한 일반 빗맞음, 아니면 감각 탓.
+  if (baseHit < 1 && roll >= baseHit) return '공격이 빗나갔다';
+  return `공격이 ${withParticle(sensoryMissLabel(actor), '으로')} 빗나갔다`;
 }
 
 // 마비·구토·가려움은 명중 판정 이전에 턴을 통째로 날린다.
@@ -549,10 +558,16 @@ function resolveHumanMove(
     return { log: `${enemy.name}의 ${stagedMove.name}!\n${withParticle(enemy.name, '은')} ${withParticle(actionFailureLabel(enemy), '으로')} 움직이지 못했다.` };
   }
 
-  if (missesFromSensoryAbnormality(enemy)) {
+  const enemyConfusionDamage = resolveConfusionSelfHit(enemy);
+  if (enemyConfusionDamage > 0) {
+    return { log: `${enemy.name}의 ${stagedMove.name}!\n${withParticle(enemy.name, '은')} 혼란에 빠져 자신을 공격했다! (${enemyConfusionDamage} 피해)` };
+  }
+
+  const enemyMissReason = attackMissReason(enemy, enemyMove);
+  if (enemyMissReason) {
     advanceStagedMove(enemy, enemyMove);
     applyAttackTriggeredStatusDamage(enemy);
-    return { log: `${enemy.name}의 ${stagedMove.name}!\n${enemy.name}의 공격이 ${withParticle(sensoryMissLabel(enemy), '으로')} 빗나갔다.` };
+    return { log: `${enemy.name}의 ${stagedMove.name}!\n${enemy.name}의 ${enemyMissReason}.` };
   }
 
   const resolvedMove = resolveMoveOutcome(stagedMove, Math.random());
@@ -639,10 +654,16 @@ function resolveEnemyTurn(
     return { log: `${enemy.name}의 ${stagedMove.name}!\n${withParticle(enemy.name, '은')} ${withParticle(actionFailureLabel(enemy), '으로')} 움직이지 못했다.` };
   }
 
-  if (missesFromSensoryAbnormality(enemy)) {
+  const enemyConfusionDamage = resolveConfusionSelfHit(enemy);
+  if (enemyConfusionDamage > 0) {
+    return { log: `${enemy.name}의 ${stagedMove.name}!\n${withParticle(enemy.name, '은')} 혼란에 빠져 자신을 공격했다! (${enemyConfusionDamage} 피해)` };
+  }
+
+  const enemyMissReason = attackMissReason(enemy, enemyMove);
+  if (enemyMissReason) {
     advanceStagedMove(enemy, enemyMove);
     applyAttackTriggeredStatusDamage(enemy);
-    return { log: `${enemy.name}의 ${stagedMove.name}!\n${enemy.name}의 공격이 ${withParticle(sensoryMissLabel(enemy), '으로')} 빗나갔다.` };
+    return { log: `${enemy.name}의 ${stagedMove.name}!\n${enemy.name}의 ${enemyMissReason}.` };
   }
 
   const resolvedMove = resolveMoveOutcome(stagedMove, Math.random());
@@ -804,7 +825,22 @@ export function resolvePlayerMove(
     );
   }
 
-  if (missesFromSensoryAbnormality(actor, hitRoll)) {
+  const actorConfusionDamage = resolveConfusionSelfHit(actor);
+  if (actorConfusionDamage > 0) {
+    const enemyLog = resolveEnemyTurn(actor, enemy, variance, nextState.party, nextState.activeIndex, criticalRandom);
+    return finishBattleRound(
+      nextState,
+      actor,
+      enemy,
+      `${actor.name}의 ${stagedMove.name}!\n${withParticle(actor.name, '은')} 혼란에 빠져 자신을 공격했다! (${actorConfusionDamage} 피해)`,
+      enemyLog,
+      defaultLearningDetail(nextState),
+      battleLearnText(nextState, stagedMove),
+    );
+  }
+
+  const playerMissReason = attackMissReason(actor, move, hitRoll);
+  if (playerMissReason) {
     advanceStagedMove(actor, move);
     applyAttackTriggeredStatusDamage(actor);
     const enemyLog = resolveEnemyTurn(actor, enemy, variance, nextState.party, nextState.activeIndex, criticalRandom);
@@ -812,7 +848,7 @@ export function resolvePlayerMove(
       nextState,
       actor,
       enemy,
-      `${actor.name}의 ${stagedMove.name}!\n${actor.name}의 공격이 ${withParticle(sensoryMissLabel(actor), '으로')} 빗나갔다.`,
+      `${actor.name}의 ${stagedMove.name}!\n${actor.name}의 ${playerMissReason}.`,
       enemyLog,
       defaultLearningDetail(nextState),
       battleLearnText(nextState, stagedMove),
