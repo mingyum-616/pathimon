@@ -35,6 +35,7 @@ import {
   evolvePartyMember,
   isEvolutionReadyForPartyMember,
 } from '../state/runState';
+import { captureFloorCheckpoint } from '../save/runCheckpoint';
 import type { CapsuleId, HitEffectiveness, MoveId, RunState, RuntimeMonster } from '../types/game';
 import { COLORS, APP_WIDTH, APP_HEIGHT, FONT_FAMILY } from '../game/constants';
 import {
@@ -171,6 +172,7 @@ export class BattleScene extends Phaser.Scene {
 
   init(data: BattleSceneData = {}): void {
     this.state = this.normalizeState(data.state);
+    captureFloorCheckpoint(this.state, 'BattleScene');
     this.selectedMoveId = firstUsableMove(this.state.party[this.state.activeIndex]);
     this.armedMoveId = this.selectedMoveId;
     this.viewMode = 'command';

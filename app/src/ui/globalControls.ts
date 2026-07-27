@@ -1,13 +1,37 @@
 import type Phaser from 'phaser';
 import { getAudioMuted, onAudioMutedChange, toggleAudioMuted } from '../audio/audioSettings';
-import { APP_HEIGHT, APP_WIDTH, FONT_FAMILY } from '../game/constants';
+import { FONT_FAMILY } from '../game/constants';
+import { openRunSaveDialog } from '../save/runSaveUi';
 import { gameGuideContent } from './gameGuideUi';
 
-export function globalControlLabels(): { guide: string; mute: string; unmute: string } {
+const CONTROL_RAIL_WIDTH = 50;
+const OUTSIDE_GUTTER_REQUIRED = 62;
+
+export interface GlobalControlPosition {
+  insideCanvas: boolean;
+  left: number;
+  top: number;
+}
+
+export function globalControlLabels(): { guide: string; mute: string; save: string; unmute: string } {
   return {
     guide: '전투 안내 열기',
     mute: '음소거',
+    save: '저장 및 불러오기',
     unmute: '소리 켜기',
+  };
+}
+
+export function globalControlPosition(
+  canvasRect: DOMRect,
+  viewportWidth: number,
+): GlobalControlPosition {
+  const rightGutter = viewportWidth - canvasRect.right;
+  const insideCanvas = rightGutter < OUTSIDE_GUTTER_REQUIRED;
+  return {
+    insideCanvas,
+    left: insideCanvas ? canvasRect.right - CONTROL_RAIL_WIDTH : canvasRect.right + 12,
+    top: canvasRect.top + 70,
   };
 }
 
@@ -25,11 +49,11 @@ function createButton(label: string, text: string): HTMLButtonElement {
     cursor: 'pointer',
     display: 'flex',
     fontFamily: FONT_FAMILY,
-    fontSize: '18px',
-    height: '34px',
+    fontSize: '19px',
+    height: '40px',
     justifyContent: 'center',
     padding: '0',
-    width: '34px',
+    width: '40px',
   });
   return button;
 }
@@ -117,13 +141,17 @@ export function mountGlobalControls(game: Phaser.Game): () => void {
   const container = document.createElement('div');
   const muteButton = createButton(labels.mute, '🔊');
   const guideButton = createButton(labels.guide, '▤');
+  const saveButton = createButton(labels.save, '💾');
   Object.assign(container.style, {
+    background: 'rgba(17, 23, 34, 0.82)',
+    border: '1px solid rgba(114, 214, 255, 0.32)',
     display: 'grid',
     gap: '6px',
+    padding: '4px',
     position: 'fixed',
     zIndex: '10010',
   });
-  container.append(muteButton, guideButton);
+  container.append(muteButton, guideButton, saveButton);
   document.body.appendChild(container);
 
   const syncMute = (muted: boolean): void => {
@@ -143,23 +171,30 @@ export function mountGlobalControls(game: Phaser.Game): () => void {
     event.stopPropagation();
     openGuide(game);
   });
+  saveButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    openRunSaveDialog(game);
+  });
 
   const positionControls = (): void => {
     const canvas = game.canvas;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const scaleX = rect.width / APP_WIDTH;
-    const scaleY = rect.height / APP_HEIGHT;
-    container.style.left = `${rect.left + (APP_WIDTH - 54) * scaleX}px`;
-    container.style.top = `${rect.top + 70 * scaleY}px`;
-    container.style.transform = `scale(${Math.min(scaleX, scaleY)})`;
-    container.style.transformOrigin = 'top left';
+    const position = globalControlPosition(rect, window.innerWidth);
+    container.style.left = `${position.left}px`;
+    container.style.top = `${position.top}px`;
+    container.dataset.placement = position.insideCanvas ? 'inside' : 'outside';
   };
   const animationFrame = requestAnimationFrame(positionControls);
+  const resizeObserver = typeof ResizeObserver === 'undefined'
+    ? undefined
+    : new ResizeObserver(positionControls);
+  resizeObserver?.observe(game.canvas);
   window.addEventListener('resize', positionControls);
 
   return () => {
     cancelAnimationFrame(animationFrame);
+    resizeObserver?.disconnect();
     window.removeEventListener('resize', positionControls);
     removeMuteListener();
     container.remove();

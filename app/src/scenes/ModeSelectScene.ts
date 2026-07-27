@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { playIntroBgm, queueIntroBgm } from '../audio/introBgm';
 import { APP_HEIGHT, APP_WIDTH, COLORS } from '../game/constants';
+import { clearActiveRunCheckpoint } from '../save/runCheckpoint';
 import type { RunMode, VisualStyle } from '../types/game';
 import { addLabel, addSelectedBadge, applySelectionStyle, drawPanel } from '../ui/draw';
 import { TEXT } from '../ui/typography';
@@ -36,6 +37,7 @@ export class ModeSelectScene extends Phaser.Scene {
   }
 
   create(): void {
+    clearActiveRunCheckpoint();
     this.choice = {};
     this.optionCursor = 0;
     this.startCursor = false;

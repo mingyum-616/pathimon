@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { applyFinalBossSkill } from '../battle/turn';
+import { captureFloorCheckpoint } from '../save/runCheckpoint';
 import type { RunState } from '../types/game';
 import { APP_WIDTH, APP_HEIGHT, COLORS } from '../game/constants';
 import { withParticle } from '../game/text';
@@ -32,6 +33,7 @@ export class BossIntroScene extends Phaser.Scene {
       throw new Error('BossIntroScene requires state');
     }
     this.state = data.state;
+    captureFloorCheckpoint(this.state, 'BossIntroScene');
     const enemy = this.state.enemy;
     this.dialogueLines = enemy?.encounterDialogue?.length
       ? [...enemy.encounterDialogue]

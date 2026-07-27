@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { createBossRosterIds } from '../data/bosses';
 import { APP_WIDTH, APP_HEIGHT, COLORS } from '../game/constants';
+import { clearActiveRunCheckpoint } from '../save/runCheckpoint';
 import { addLabel } from '../ui/draw';
 import { keyboardCommand } from '../ui/keyboard';
 import { titleCharacterDisplaySize, titleLogoStyle, titleScreenContent } from '../ui/titleUi';
@@ -15,6 +16,7 @@ export class TitleScene extends Phaser.Scene {
   }
 
   init(): void {
+    clearActiveRunCheckpoint();
     this.bossRosterIds = createBossRosterIds(Math.random);
     this.content = titleScreenContent({ bossRosterIds: this.bossRosterIds, random: Math.random });
     this.registry.set('bossRosterIds', [...this.bossRosterIds]);
