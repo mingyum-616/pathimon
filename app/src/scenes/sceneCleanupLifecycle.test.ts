@@ -64,6 +64,10 @@ describe('scene cleanup lifecycle wiring', () => {
     expect(battleSceneSource).toContain('DEX_TABLE_COLUMNS');
     expect(battleSceneSource).toContain('private drawMultiplierChip');
     expect(battleSceneSource).toContain('private drawDexPortrait');
+    expect(battleSceneSource).toContain(
+      "const anchorX = column.align === 'right' ? column.x + column.width : column.x;",
+    );
+    expect(battleSceneSource).toContain('addBoxLabel(this, anchorX, headerY, column.title');
     // 설명은 표에 상시 노출하지 않고 커서가 놓인 한 줄만 띄운다.
     expect(battleSceneSource).toContain('dexRowCursor');
   });

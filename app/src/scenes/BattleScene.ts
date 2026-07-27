@@ -1188,7 +1188,8 @@ export class BattleScene extends Phaser.Scene {
     const headerY = 420;
     this.add.rectangle(230, headerY + 18, 608, 1, COLORS.border, 0.9).setOrigin(0);
     DEX_TABLE_COLUMNS.filter((column) => showMultiplier || column.title !== '배율').forEach((column) => {
-      addBoxLabel(this, column.x, headerY, column.title, {
+      const anchorX = column.align === 'right' ? column.x + column.width : column.x;
+      addBoxLabel(this, anchorX, headerY, column.title, {
         width: column.width,
         height: 18,
         size: TEXT.caption,
