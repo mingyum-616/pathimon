@@ -21,7 +21,6 @@ export interface StarterChoiceSummary {
 
 export interface StarterSlotVisual {
   capsuleSize: number;
-  selectedOutline: boolean;
   spriteSize: number;
 }
 
@@ -67,7 +66,6 @@ export function starterCapsuleSlots(): StarterCapsuleSlot[] {
 export function starterSlotVisual(focused: boolean, selected: boolean): StarterSlotVisual {
   return {
     capsuleSize: focused ? 58 : selected ? 56 : 52,
-    selectedOutline: selected,
     spriteSize: focused ? 106 : selected ? 104 : 96,
   };
 }

@@ -65,15 +65,13 @@ describe('starter select UI helpers', () => {
     expect(slots.map((slot) => slot.x)).toEqual([356, 512, 668]);
   });
 
-  it('keeps a selected starter visibly enlarged after focus moves to the start button', () => {
+  it('keeps a selected starter visibly enlarged without adding a second selection ring', () => {
     expect(starterSlotVisual(false, true)).toMatchObject({
       capsuleSize: 56,
-      selectedOutline: true,
       spriteSize: 104,
     });
     expect(starterSlotVisual(false, false)).toMatchObject({
       capsuleSize: 52,
-      selectedOutline: false,
       spriteSize: 96,
     });
   });

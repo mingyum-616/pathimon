@@ -55,6 +55,14 @@ describe('global controls', () => {
     });
   });
 
+  it('keeps the mobile pad visually quiet while preserving its large hit areas', () => {
+    expect(globalControlsSource).toContain('dataset.pathimonDpadBar');
+    expect(globalControlsSource).toContain("background: 'rgba(141, 129, 152, 0.18)'");
+    expect(globalControlsSource).toContain("border: '2px solid rgba(216, 205, 230, 0.2)'");
+    expect(globalControlsSource).not.toContain("background: 'rgba(77, 71, 96, 0.54)'");
+    expect(globalControlsSource).not.toContain("border: '2px solid rgba(216, 205, 230, 0.58)'");
+  });
+
   it('places the control rail outside the canvas when the right gutter is wide enough', () => {
     expect(globalControlPosition({
       bottom: 576,

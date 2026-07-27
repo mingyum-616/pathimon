@@ -142,9 +142,9 @@ function createVirtualKeyButton(
   button.textContent = text;
   Object.assign(button.style, {
     alignItems: 'center',
-    background: 'rgba(77, 71, 96, 0.54)',
-    border: '2px solid rgba(216, 205, 230, 0.58)',
-    color: '#ce6b5e',
+    background: 'transparent',
+    border: '0',
+    color: 'rgba(206, 107, 94, 0.58)',
     display: 'flex',
     fontFamily: FONT_FAMILY,
     fontSize: '28px',
@@ -188,6 +188,21 @@ function createMobileGamepad(): HTMLDivElement {
     position: 'fixed',
     width: '162px',
   });
+  (['horizontal', 'vertical'] as const).forEach((orientation) => {
+    const bar = document.createElement('div');
+    bar.dataset.pathimonDpadBar = orientation;
+    Object.assign(bar.style, {
+      background: 'rgba(141, 129, 152, 0.18)',
+      borderRadius: '8px',
+      height: orientation === 'horizontal' ? '54px' : '162px',
+      left: orientation === 'horizontal' ? '0' : '54px',
+      pointerEvents: 'none',
+      position: 'absolute',
+      top: orientation === 'horizontal' ? '54px' : '0',
+      width: orientation === 'horizontal' ? '162px' : '54px',
+    });
+    dpad.appendChild(bar);
+  });
   const directions: Array<{
     column: number;
     id: 'down' | 'left' | 'right' | 'up';
@@ -204,7 +219,7 @@ function createMobileGamepad(): HTMLDivElement {
     const button = createVirtualKeyButton(label, text, keys[id]);
     button.style.gridColumn = String(column);
     button.style.gridRow = String(row);
-    button.style.borderRadius = '8px';
+    button.style.zIndex = '1';
     dpad.appendChild(button);
   });
 
@@ -221,7 +236,10 @@ function createMobileGamepad(): HTMLDivElement {
   const buttonB = createVirtualKeyButton('취소', 'B', keys.b);
   [buttonA, buttonB].forEach((button) => {
     Object.assign(button.style, {
+      background: 'rgba(141, 129, 152, 0.18)',
+      border: '2px solid rgba(216, 205, 230, 0.2)',
       borderRadius: '50%',
+      color: 'rgba(206, 107, 94, 0.58)',
       height: '74px',
       position: 'absolute',
       width: '74px',

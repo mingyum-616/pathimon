@@ -26,8 +26,11 @@ describe('StarterSelectScene audio', () => {
     expect(starterSelectSceneSource).toContain('.setDisplaySize(visual.spriteSize, visual.spriteSize)');
   });
 
-  it('keeps a white selected outline after focus moves to the start button', () => {
+  it('moves one blue capsule ring with the current slot without drawing a white circle', () => {
     expect(starterSelectSceneSource).toContain('starterSlotVisual(active, chosen)');
-    expect(starterSelectSceneSource).toContain('visual.selectedOutline ? 0xffffff');
+    expect(starterSelectSceneSource).toContain('const active = this.slotCursor === index;');
+    expect(starterSelectSceneSource).toContain('active ? ACTIVE_LINE : 0x4a2a2a');
+    expect(starterSelectSceneSource).not.toContain('visual.selectedOutline');
+    expect(starterSelectSceneSource).not.toContain('this.add.circle(slot.x, slot.y + 4');
   });
 });
