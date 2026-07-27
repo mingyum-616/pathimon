@@ -19,6 +19,48 @@ export interface GlobalControlPosition {
   top: number;
 }
 
+export interface MobileControlAnchors {
+  actions: { bottom: string; right: string };
+  dpad: { bottom: string; left: string };
+  rail: { right: string; top: string };
+}
+
+interface MobileVirtualKey {
+  code: string;
+  key: string;
+  keyCode: number;
+}
+
+type MobileVirtualKeyId = 'a' | 'b' | 'down' | 'left' | 'right' | 'up';
+
+export function mobileControlAnchors(): MobileControlAnchors {
+  return {
+    actions: {
+      bottom: 'calc(env(safe-area-inset-bottom) + 14px)',
+      right: 'calc(env(safe-area-inset-right) + 14px)',
+    },
+    dpad: {
+      bottom: 'calc(env(safe-area-inset-bottom) + 14px)',
+      left: 'calc(env(safe-area-inset-left) + 14px)',
+    },
+    rail: {
+      right: 'calc(env(safe-area-inset-right) + 8px)',
+      top: 'calc(env(safe-area-inset-top) + 8px)',
+    },
+  };
+}
+
+export function mobileVirtualKeyMap(): Record<MobileVirtualKeyId, MobileVirtualKey> {
+  return {
+    a: { code: 'Enter', key: 'Enter', keyCode: 13 },
+    b: { code: 'Escape', key: 'Escape', keyCode: 27 },
+    down: { code: 'ArrowDown', key: 'ArrowDown', keyCode: 40 },
+    left: { code: 'ArrowLeft', key: 'ArrowLeft', keyCode: 37 },
+    right: { code: 'ArrowRight', key: 'ArrowRight', keyCode: 39 },
+    up: { code: 'ArrowUp', key: 'ArrowUp', keyCode: 38 },
+  };
+}
+
 export function globalControlLabels(): {
   guide: string;
   mute: string;
@@ -71,6 +113,125 @@ function createButton(label: string, text: string): HTMLButtonElement {
     width: '40px',
   });
   return button;
+}
+
+function dispatchVirtualKey(key: MobileVirtualKey): void {
+  (['keydown', 'keyup'] as const).forEach((type) => {
+    const event = new KeyboardEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      code: key.code,
+      key: key.key,
+    });
+    Object.defineProperties(event, {
+      keyCode: { configurable: true, get: () => key.keyCode },
+      which: { configurable: true, get: () => key.keyCode },
+    });
+    window.dispatchEvent(event);
+  });
+}
+
+function createVirtualKeyButton(
+  label: string,
+  text: string,
+  key: MobileVirtualKey,
+): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.ariaLabel = label;
+  button.textContent = text;
+  Object.assign(button.style, {
+    alignItems: 'center',
+    background: 'rgba(77, 71, 96, 0.54)',
+    border: '2px solid rgba(216, 205, 230, 0.58)',
+    color: '#ce6b5e',
+    display: 'flex',
+    fontFamily: FONT_FAMILY,
+    fontSize: '28px',
+    justifyContent: 'center',
+    padding: '0',
+    pointerEvents: 'auto',
+    touchAction: 'none',
+    userSelect: 'none',
+    WebkitTapHighlightColor: 'transparent',
+  });
+  button.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dispatchVirtualKey(key);
+  });
+  return button;
+}
+
+function createMobileGamepad(): HTMLDivElement {
+  const anchors = mobileControlAnchors();
+  const keys = mobileVirtualKeyMap();
+  const root = document.createElement('div');
+  root.dataset.pathimonTouchGamepad = 'true';
+  Object.assign(root.style, {
+    display: 'none',
+    inset: '0',
+    pointerEvents: 'none',
+    position: 'fixed',
+    zIndex: '10009',
+  });
+
+  const dpad = document.createElement('div');
+  dpad.dataset.pathimonTouchDpad = 'true';
+  Object.assign(dpad.style, {
+    bottom: anchors.dpad.bottom,
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 54px)',
+    gridTemplateRows: 'repeat(3, 54px)',
+    height: '162px',
+    left: anchors.dpad.left,
+    position: 'fixed',
+    width: '162px',
+  });
+  const directions: Array<{
+    column: number;
+    id: 'down' | 'left' | 'right' | 'up';
+    label: string;
+    row: number;
+    text: string;
+  }> = [
+    { id: 'up', label: '위로 이동', text: '↑', column: 2, row: 1 },
+    { id: 'left', label: '왼쪽으로 이동', text: '←', column: 1, row: 2 },
+    { id: 'right', label: '오른쪽으로 이동', text: '→', column: 3, row: 2 },
+    { id: 'down', label: '아래로 이동', text: '↓', column: 2, row: 3 },
+  ];
+  directions.forEach(({ column, id, label, row, text }) => {
+    const button = createVirtualKeyButton(label, text, keys[id]);
+    button.style.gridColumn = String(column);
+    button.style.gridRow = String(row);
+    button.style.borderRadius = '8px';
+    dpad.appendChild(button);
+  });
+
+  const actions = document.createElement('div');
+  actions.dataset.pathimonTouchActions = 'true';
+  Object.assign(actions.style, {
+    bottom: anchors.actions.bottom,
+    height: '136px',
+    position: 'fixed',
+    right: anchors.actions.right,
+    width: '164px',
+  });
+  const buttonA = createVirtualKeyButton('확인', 'A', keys.a);
+  const buttonB = createVirtualKeyButton('취소', 'B', keys.b);
+  [buttonA, buttonB].forEach((button) => {
+    Object.assign(button.style, {
+      borderRadius: '50%',
+      height: '74px',
+      position: 'absolute',
+      width: '74px',
+    });
+  });
+  Object.assign(buttonA.style, { right: '0', top: '0' });
+  Object.assign(buttonB.style, { bottom: '0', left: '0' });
+  actions.append(buttonA, buttonB);
+  root.append(dpad, actions);
+  return root;
 }
 
 function openGuide(game: Phaser.Game): void {
@@ -178,6 +339,8 @@ export function mountGlobalControls(game: Phaser.Game): () => void {
     container.append(touchButton);
   }
   document.body.appendChild(container);
+  const mobileGamepad = touchCapable ? createMobileGamepad() : undefined;
+  if (mobileGamepad) document.body.appendChild(mobileGamepad);
 
   const syncMute = (muted: boolean): void => {
     game.sound.mute = muted;
@@ -188,11 +351,22 @@ export function mountGlobalControls(game: Phaser.Game): () => void {
   const removeMuteListener = onAudioMutedChange(syncMute);
   syncMute(getAudioMuted());
 
+  let touchControlsEnabled = getTouchControlsEnabled();
+  const syncMobileGamepad = (): void => {
+    if (!mobileGamepad) return;
+    const display = touchControlsEnabled
+      && game.scene.isActive('BattleScene')
+      ? 'block'
+      : 'none';
+    if (mobileGamepad.style.display !== display) mobileGamepad.style.display = display;
+  };
   const syncTouchControls = (enabled: boolean): void => {
+    touchControlsEnabled = enabled;
     touchButton.ariaLabel = enabled ? labels.touchHide : labels.touchShow;
     touchButton.title = touchButton.ariaLabel;
     touchButton.setAttribute('aria-pressed', String(enabled));
     touchButton.style.opacity = enabled ? '1' : '0.48';
+    syncMobileGamepad();
   };
   const removeTouchListener = onTouchControlsEnabledChange(syncTouchControls);
   syncTouchControls(getTouchControlsEnabled());
@@ -215,11 +389,20 @@ export function mountGlobalControls(game: Phaser.Game): () => void {
   });
 
   const positionControls = (): void => {
+    if (touchCapable) {
+      const rail = mobileControlAnchors().rail;
+      container.style.left = 'auto';
+      container.style.right = rail.right;
+      container.style.top = rail.top;
+      container.dataset.placement = 'viewport';
+      return;
+    }
     const canvas = game.canvas;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const position = globalControlPosition(rect, window.innerWidth);
     container.style.left = `${position.left}px`;
+    container.style.right = 'auto';
     container.style.top = `${position.top}px`;
     container.dataset.placement = position.insideCanvas ? 'inside' : 'outside';
   };
@@ -229,13 +412,17 @@ export function mountGlobalControls(game: Phaser.Game): () => void {
     : new ResizeObserver(positionControls);
   resizeObserver?.observe(game.canvas);
   window.addEventListener('resize', positionControls);
+  game.events.on('poststep', syncMobileGamepad);
+  syncMobileGamepad();
 
   return () => {
     cancelAnimationFrame(animationFrame);
     resizeObserver?.disconnect();
     window.removeEventListener('resize', positionControls);
+    game.events.off('poststep', syncMobileGamepad);
     removeMuteListener();
     removeTouchListener();
+    mobileGamepad?.remove();
     container.remove();
   };
 }

@@ -72,13 +72,10 @@ describe('scene cleanup lifecycle wiring', () => {
     expect(battleSceneSource).toContain('dexRowCursor');
   });
 
-  it('draws the virtual pad only on touch devices', () => {
-    expect(battleSceneSource).toMatch(
-      /private drawMobileOverlay\(\): void \{\s*if \(!this\.mobileControlOverlayInteractive\(\) \|\| !getTouchControlsEnabled\(\)\) return;/,
-    );
-    expect(battleSceneSource).toContain('onTouchControlsEnabledChange');
-    expect(battleSceneSource).toContain('this.removeTouchControlsListener?.()');
-    expect(battleSceneSource).toContain('const layout = mobileControlOverlayLayout();');
+  it('leaves mobile controls to the viewport overlay instead of drawing over battle UI', () => {
+    expect(battleSceneSource).not.toContain('drawMobileOverlay');
+    expect(battleSceneSource).not.toContain('drawActionOverlayButton');
+    expect(battleSceneSource).not.toContain('onTouchControlsEnabledChange');
     expect(battleSceneSource).toContain('this.spriteScaleFor(player, spriteLayout.player.scale)');
   });
 

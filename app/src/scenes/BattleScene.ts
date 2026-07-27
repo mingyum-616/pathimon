@@ -68,8 +68,6 @@ import {
   hpPercentLabel,
   lockedMoveOverlayPath,
   matchupGateCopy,
-  mobileControlOverlayInteractive,
-  mobileControlOverlayLayout,
   mobileHomeButtonLayout,
   monsterStatLine,
   shouldGateMatchupTable,
@@ -90,7 +88,6 @@ import {
 import type { BattleActionId, BattleUnitPanelRole, MatchupGateCopy, PartyMenuPurpose, PathimonTypeIcon } from '../ui/battleUi';
 import { destroySceneChildren } from '../ui/sceneCleanup';
 import { addBoxLabel, addLabel, drawHpBar, drawPanel } from '../ui/draw';
-import { getTouchControlsEnabled, onTouchControlsEnabledChange } from '../ui/touchControls';
 import { MIN_TEXT_SIZE, MUTED_ALPHA, TEXT } from '../ui/typography';
 import { advanceTypewriter } from '../ui/typewriter';
 
@@ -107,9 +104,6 @@ type Direction = 'up' | 'down' | 'left' | 'right';
 const BATTLE_AREA_BOTTOM = 386;
 const BUTTON_FILL = 0x2f2840;
 const BUTTON_ACTIVE_FILL = 0x4a405d;
-const OVERLAY_FILL = 0x8d8198;
-const OVERLAY_STROKE = 0xd8cde6;
-const OVERLAY_TEXT = 0xce6b5e;
 const BATTLE_EFFECT_DEPTH = 760;
 const BATTLE_STATUS_HOLD_MS = 1000;
 const TYPEWRITER_INTERVAL_MS = 24;
@@ -151,7 +145,6 @@ export class BattleScene extends Phaser.Scene {
   private statusProfileMaxScroll = 0;
   private statusSwipePointerId?: number;
   private statusSwipeLastY?: number;
-  private removeTouchControlsListener?: () => void;
   private selectedBgmKey = '';
   private preserveBattleBgmOnShutdown = false;
   private isAnimating = false;
@@ -198,7 +191,6 @@ export class BattleScene extends Phaser.Scene {
     this.statusProfileMaxScroll = 0;
     this.statusSwipePointerId = undefined;
     this.statusSwipeLastY = undefined;
-    this.removeTouchControlsListener = undefined;
     this.selectedBgmKey = this.chooseBgmKey();
     this.preserveBattleBgmOnShutdown = false;
     this.isAnimating = false;
@@ -225,8 +217,6 @@ export class BattleScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.clearStatusTooltip();
       this.clearBattleMessageTimer();
-      this.removeTouchControlsListener?.();
-      this.removeTouchControlsListener = undefined;
       this.input.off('pointerdown', this.handleStatusSwipeStart, this);
       this.input.off('pointermove', this.handleStatusSwipeMove, this);
       this.input.off('pointerup', this.handleStatusSwipeEnd, this);
@@ -239,7 +229,6 @@ export class BattleScene extends Phaser.Scene {
       }
     });
     this.setupKeyboardControls();
-    this.removeTouchControlsListener = onTouchControlsEnabledChange(() => this.render());
     this.input.on('pointerdown', this.handleStatusSwipeStart, this);
     this.input.on('pointermove', this.handleStatusSwipeMove, this);
     this.input.on('pointerup', this.handleStatusSwipeEnd, this);
@@ -395,7 +384,6 @@ export class BattleScene extends Phaser.Scene {
 
     if (this.battleMessageStage === 'preparation' && this.viewMode === 'status') {
       this.drawStatusView();
-      this.drawMobileOverlay();
       return;
     }
 
@@ -421,9 +409,6 @@ export class BattleScene extends Phaser.Scene {
       && this.viewMode !== 'captureQuiz'
       && !this.showFirstTrainerGuide
     ) {
-      if (this.state.phase !== 'floorClear') {
-        this.drawMobileOverlay();
-      }
       this.drawHomeButton();
     }
   }
@@ -2866,47 +2851,12 @@ export class BattleScene extends Phaser.Scene {
     this.scene.start('ModeSelectScene');
   }
 
-  // 가상 패드는 터치 기기에서만 그린다. 데스크톱에서도 그리면 대사·명령 버튼 위를 덮는다.
-  private drawMobileOverlay(): void {
-    if (!this.mobileControlOverlayInteractive() || !getTouchControlsEnabled()) return;
-
-    const depth = 900;
-    const layout = mobileControlOverlayLayout();
-    const dpad = layout.dpad;
-
-    this.add.rectangle(dpad.x, dpad.y, dpad.armLength, dpad.thickness, OVERLAY_FILL, 0.24).setDepth(depth);
-    this.add.rectangle(dpad.x, dpad.y, dpad.thickness, dpad.armLength, OVERLAY_FILL, 0.24).setDepth(depth);
-    this.add.rectangle(dpad.x, dpad.y, dpad.thickness, dpad.thickness, OVERLAY_FILL, 0.16).setDepth(depth);
-
-    this.drawOverlayHitArea(dpad.x, dpad.y - dpad.step, dpad.hitSize, dpad.hitSize, 'up', '↑', depth + 1);
-    this.drawOverlayHitArea(dpad.x, dpad.y + dpad.step, dpad.hitSize, dpad.hitSize, 'down', '↓', depth + 1);
-    this.drawOverlayHitArea(dpad.x - dpad.step, dpad.y, dpad.hitSize, dpad.hitSize, 'left', '←', depth + 1);
-    this.drawOverlayHitArea(dpad.x + dpad.step, dpad.y, dpad.hitSize, dpad.hitSize, 'right', '→', depth + 1);
-
-    this.drawActionOverlayButton(layout.actionA.x, layout.actionA.y, layout.actionA.radius, 'A', () => this.handleConfirmInput(), depth + 1);
-    this.drawActionOverlayButton(layout.actionB.x, layout.actionB.y, layout.actionB.radius, 'B', () => this.handleCancelInput(), depth + 1);
-  }
-
   // 파티·스테이터스 화면에는 자체 복귀 버튼이 있어 겹침을 피하려 전투 화면에서만 띄운다.
   private drawHomeButton(): void {
     const homeButton = mobileHomeButtonLayout();
     this.drawOverlayTextButton(homeButton.x, homeButton.y, homeButton.width, homeButton.height, homeButton.label, () => {
       this.returnToModeSelect();
     }, 901, true);
-  }
-
-  private drawOverlayHitArea(x: number, y: number, width: number, height: number, direction: Direction, label: string, depth: number): void {
-    const hit = this.add.rectangle(x, y, width, height, OVERLAY_FILL, 0.02).setDepth(depth);
-    hit.setInteractive({ useHandCursor: true });
-    hit.on('pointerdown', () => this.handleDirectionalInput(direction));
-    addLabel(this, x, y, label, TEXT.heading).setOrigin(0.5).setAlpha(0.55).setDepth(depth + 1);
-  }
-
-  private drawActionOverlayButton(x: number, y: number, radius: number, label: string, onClick: () => void, depth: number): void {
-    const circle = this.add.circle(x, y, radius, OVERLAY_FILL, 0.27).setStrokeStyle(2, OVERLAY_STROKE, 0.22).setDepth(depth);
-    circle.setInteractive({ useHandCursor: true });
-    circle.on('pointerdown', onClick);
-    addLabel(this, x, y, label, TEXT.display).setOrigin(0.5).setTint(OVERLAY_TEXT).setAlpha(0.72).setDepth(depth + 1);
   }
 
   private drawLockedMoveOverlay(x: number, y: number, width: number, height: number): void {
@@ -2942,14 +2892,6 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setColor(COLORS.muted)
       .setDepth(depth + 1);
-  }
-
-  private mobileControlOverlayInteractive(): boolean {
-    return mobileControlOverlayInteractive({
-      hasTouch: this.sys.game.device.input.touch,
-      coarsePointer: window.matchMedia('(pointer: coarse)').matches,
-      maxTouchPoints: navigator.maxTouchPoints ?? 0,
-    });
   }
 
   private drawCursorMarker(x: number, y: number): void {

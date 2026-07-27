@@ -51,7 +51,7 @@ export function mountMobileLayout(game: Phaser.Game): () => void {
 
   const canvas = game.canvas;
   const initialPointerEvents = canvas.style.pointerEvents;
-  const initialTouchAction = canvas.style.touchAction;
+  const initialTouchAction = canvas.style.touchAction || '';
   let blockKeyboardInput = false;
   const handleKeyDown = (event: KeyboardEvent): void => {
     if (!blockKeyboardInput) return;
@@ -65,14 +65,11 @@ export function mountMobileLayout(game: Phaser.Game): () => void {
       window.innerWidth,
       window.innerHeight,
     );
-    const fillLandscapeViewport = isTouchCapable(signals) && !showOverlay;
     blockKeyboardInput = showOverlay;
     overlay.style.display = showOverlay ? 'flex' : 'none';
     overlay.style.pointerEvents = showOverlay ? 'auto' : 'none';
     canvas.style.pointerEvents = showOverlay ? 'none' : initialPointerEvents;
-    canvas.style.touchAction = fillLandscapeViewport ? 'none' : initialTouchAction;
-    document.body.classList.toggle('pathimon-touch-landscape', fillLandscapeViewport);
-    game.scale?.refresh?.();
+    canvas.style.touchAction = isTouchCapable(signals) && !showOverlay ? 'none' : initialTouchAction;
   };
 
   syncLayout();
@@ -92,8 +89,6 @@ export function mountMobileLayout(game: Phaser.Game): () => void {
     window.removeEventListener('orientationchange', syncLayout);
     canvas.style.pointerEvents = initialPointerEvents;
     canvas.style.touchAction = initialTouchAction;
-    document.body.classList.remove('pathimon-touch-landscape');
-    game.scale?.refresh?.();
     overlay.remove();
   };
 }

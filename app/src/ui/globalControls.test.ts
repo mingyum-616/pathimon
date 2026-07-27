@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import globalControlsSource from './globalControls.ts?raw';
-import { globalControlLabels, globalControlPosition } from './globalControls';
+import {
+  globalControlLabels,
+  globalControlPosition,
+  mobileControlAnchors,
+  mobileVirtualKeyMap,
+} from './globalControls';
 
 describe('global controls', () => {
   it('provides mute, battle-guide, and save controls with accessible labels', () => {
@@ -18,6 +23,36 @@ describe('global controls', () => {
     expect(globalControlsSource).toContain('toggleTouchControlsEnabled');
     expect(globalControlsSource).toContain('isTouchCapable');
     expect(globalControlsSource).toContain('touchButton');
+  });
+
+  it('anchors mobile controls to viewport safe areas instead of the game canvas', () => {
+    expect(mobileControlAnchors()).toEqual({
+      actions: {
+        bottom: 'calc(env(safe-area-inset-bottom) + 14px)',
+        right: 'calc(env(safe-area-inset-right) + 14px)',
+      },
+      dpad: {
+        bottom: 'calc(env(safe-area-inset-bottom) + 14px)',
+        left: 'calc(env(safe-area-inset-left) + 14px)',
+      },
+      rail: {
+        right: 'calc(env(safe-area-inset-right) + 8px)',
+        top: 'calc(env(safe-area-inset-top) + 8px)',
+      },
+    });
+    expect(globalControlsSource).toContain('createMobileGamepad');
+    expect(globalControlsSource).toContain("game.scene.isActive('BattleScene')");
+  });
+
+  it('maps the mobile pad to the same keyboard commands as physical controls', () => {
+    expect(mobileVirtualKeyMap()).toEqual({
+      a: { code: 'Enter', key: 'Enter', keyCode: 13 },
+      b: { code: 'Escape', key: 'Escape', keyCode: 27 },
+      down: { code: 'ArrowDown', key: 'ArrowDown', keyCode: 40 },
+      left: { code: 'ArrowLeft', key: 'ArrowLeft', keyCode: 37 },
+      right: { code: 'ArrowRight', key: 'ArrowRight', keyCode: 39 },
+      up: { code: 'ArrowUp', key: 'ArrowUp', keyCode: 38 },
+    });
   });
 
   it('places the control rail outside the canvas when the right gutter is wide enough', () => {

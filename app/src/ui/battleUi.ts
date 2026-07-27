@@ -16,7 +16,6 @@ import { bossMoveEffectiveness, createBossDefenseProfile } from '../battle/bossM
 import { interpolatePathimonName, withParticle } from '../game/text';
 import { randomLearningPoint, sanitizeLearningText } from '../game/learning';
 import type { AbilityId, CapsuleId, EffectPrimitive, EncounterKind, MonsterData, MoveData, MoveId, MoveSlot, RunMode, RuntimeMonster, TagValue, VisualStyle } from '../types/game';
-import { isTouchCapable, type TouchCapabilitySignals } from './mobileLayout';
 
 export type BattleActionId = 'fight' | 'pass' | 'capsule' | 'dex' | 'party';
 export type PartyMenuPurpose = 'switch' | 'forced' | 'release';
@@ -459,38 +458,6 @@ export function mobileHomeButtonLayout(): LabeledButtonLayout {
     height: 28,
     label: '처음으로',
   };
-}
-
-export interface MobileControlOverlayLayout {
-  actionA: { radius: number; x: number; y: number };
-  actionB: { radius: number; x: number; y: number };
-  dpad: {
-    armLength: number;
-    hitSize: number;
-    step: number;
-    thickness: number;
-    x: number;
-    y: number;
-  };
-}
-
-export function mobileControlOverlayLayout(): MobileControlOverlayLayout {
-  return {
-    dpad: {
-      x: 110,
-      y: 470,
-      armLength: 196,
-      thickness: 64,
-      step: 62,
-      hitSize: 68,
-    },
-    actionA: { x: 904, y: 430, radius: 58 },
-    actionB: { x: 810, y: 504, radius: 52 },
-  };
-}
-
-export function mobileControlOverlayInteractive(input: TouchCapabilitySignals): boolean {
-  return isTouchCapable(input);
 }
 
 // 도전모드에서 상성표는 사실상 정답표다. 그냥 열리면 예고를 읽고 교체하는 판단이 사라진다.

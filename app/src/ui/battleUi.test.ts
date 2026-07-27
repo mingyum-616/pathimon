@@ -36,8 +36,6 @@ import {
   hpPct,
   hpPercentLabel,
   lockedMoveOverlayPath,
-  mobileControlOverlayInteractive,
-  mobileControlOverlayLayout,
   mobileHomeButtonLayout,
   monsterStatLine,
   normalizedSpriteScale,
@@ -84,14 +82,6 @@ function createMonster(overrides: Partial<RuntimeMonster> = {}): RuntimeMonster 
 }
 
 describe('battle UI helpers', () => {
-  it('enables mobile controls when the browser reports touch points', () => {
-    expect(mobileControlOverlayInteractive({
-      hasTouch: false,
-      coarsePointer: false,
-      maxTouchPoints: 2,
-    })).toBe(true);
-  });
-
   it('formats HP, attack, and defense together for the status card', () => {
     const monster = createMonster({
       hp: 55,
@@ -185,15 +175,6 @@ describe('battle UI helpers', () => {
     expect(combatSpriteScale(egg, 2.5)).toBeCloseTo(2.25);
     expect(combatSpriteScale(larva, 2.5)).toBeCloseTo(2.5);
     expect(combatSpriteScale(adult, 2.5)).toBeCloseTo(2.75);
-  });
-
-  it('keeps mobile battle controls large enough for fingers', () => {
-    const layout = mobileControlOverlayLayout();
-
-    expect(layout.dpad.hitSize).toBeGreaterThanOrEqual(68);
-    expect(layout.actionA.radius).toBeGreaterThanOrEqual(58);
-    expect(layout.actionB.radius).toBeGreaterThanOrEqual(52);
-    expect(layout.dpad.y + layout.dpad.step + layout.dpad.hitSize / 2).toBeLessThanOrEqual(576);
   });
 
   it('uses capsule-derived pathimon type border colors only in challenge mode', () => {
