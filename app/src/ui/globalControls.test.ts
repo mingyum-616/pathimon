@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import globalControlsSource from './globalControls.ts?raw';
 import { globalControlLabels, globalControlPosition } from './globalControls';
 
 describe('global controls', () => {
@@ -7,8 +8,16 @@ describe('global controls', () => {
       guide: '전투 안내 열기',
       mute: '음소거',
       save: '저장 및 불러오기',
+      touchHide: '터치 조작 숨기기',
+      touchShow: '터치 조작 표시',
       unmute: '소리 켜기',
     });
+  });
+
+  it('adds a touch-only toggle to the global control rail', () => {
+    expect(globalControlsSource).toContain('toggleTouchControlsEnabled');
+    expect(globalControlsSource).toContain('isTouchCapable');
+    expect(globalControlsSource).toContain('touchButton');
   });
 
   it('places the control rail outside the canvas when the right gutter is wide enough', () => {

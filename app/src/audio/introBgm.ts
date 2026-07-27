@@ -15,7 +15,17 @@ export function playIntroBgm(scene: Phaser.Scene): void {
   }
 
   const sound = existing ?? scene.sound.add(INTRO_BGM_PATH, { loop: true, volume: 0.34 });
-  sound.play();
+  sound.play({ loop: true, rate: 1, volume: 0.34 });
+}
+
+export function playEndingBgm(scene: Phaser.Scene): void {
+  const existing = scene.sound.get(INTRO_BGM_PATH);
+  const sound = existing ?? scene.sound.add(INTRO_BGM_PATH, { loop: true, volume: 0.22 });
+  if (sound.isPlaying) {
+    sound.stop();
+  }
+
+  sound.play({ loop: true, rate: 0.92, volume: 0.22 });
 }
 
 export function stopIntroBgm(scene: Phaser.Scene): void {

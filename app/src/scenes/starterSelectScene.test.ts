@@ -25,4 +25,12 @@ describe('StarterSelectScene audio', () => {
     expect(starterSelectSceneSource).toContain('const spriteAssets = pathimonSpriteAssets(monster, this.visualStyle);');
     expect(starterSelectSceneSource).toContain('.setDisplaySize(active ? 106 : 96, active ? 106 : 96)');
   });
+
+  it('uses only the moving focus marker instead of a fixed selected badge', () => {
+    expect(starterSelectSceneSource).not.toContain('if (chosen)');
+    expect(starterSelectSceneSource).not.toContain('const badge = this.add.circle');
+    expect(starterSelectSceneSource).toContain(
+      'shadow.setStrokeStyle(3, active ? ACTIVE_LINE : 0x4a2a2a, active ? 0.9 : 0.22);',
+    );
+  });
 });

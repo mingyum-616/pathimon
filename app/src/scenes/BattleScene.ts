@@ -89,6 +89,7 @@ import {
 import type { BattleActionId, BattleUnitPanelRole, MatchupGateCopy, PartyMenuPurpose, PathimonTypeIcon } from '../ui/battleUi';
 import { destroySceneChildren } from '../ui/sceneCleanup';
 import { addBoxLabel, addLabel, drawHpBar, drawPanel } from '../ui/draw';
+import { getTouchControlsEnabled, onTouchControlsEnabledChange } from '../ui/touchControls';
 import { MIN_TEXT_SIZE, MUTED_ALPHA, TEXT } from '../ui/typography';
 import { advanceTypewriter } from '../ui/typewriter';
 
@@ -112,6 +113,7 @@ const BATTLE_EFFECT_DEPTH = 760;
 const BATTLE_STATUS_HOLD_MS = 1000;
 const TYPEWRITER_INTERVAL_MS = 24;
 const PHASE_TWO_BOSS_SCALE = 1.2;
+const STATUS_PROFILE_VIEWPORT = { x: 424, y: 278, width: 520, height: 158 };
 
 // 도감 기술표 열 정의. 머리글과 셀이 같은 좌표를 쓰도록 한곳에 모은다.
 const DEX_TABLE_COLUMNS = [
@@ -146,6 +148,9 @@ export class BattleScene extends Phaser.Scene {
   private statusLearningOpen = false;
   private statusProfileScroll = 0;
   private statusProfileMaxScroll = 0;
+  private statusSwipePointerId?: number;
+  private statusSwipeLastY?: number;
+  private removeTouchControlsListener?: () => void;
   private selectedBgmKey = '';
   private preserveBattleBgmOnShutdown = false;
   private isAnimating = false;
@@ -190,6 +195,9 @@ export class BattleScene extends Phaser.Scene {
     this.statusLearningOpen = false;
     this.statusProfileScroll = 0;
     this.statusProfileMaxScroll = 0;
+    this.statusSwipePointerId = undefined;
+    this.statusSwipeLastY = undefined;
+    this.removeTouchControlsListener = undefined;
     this.selectedBgmKey = this.chooseBgmKey();
     this.preserveBattleBgmOnShutdown = false;
     this.isAnimating = false;
@@ -216,6 +224,11 @@ export class BattleScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.clearStatusTooltip();
       this.clearBattleMessageTimer();
+      this.removeTouchControlsListener?.();
+      this.removeTouchControlsListener = undefined;
+      this.input.off('pointerdown', this.handleStatusSwipeStart, this);
+      this.input.off('pointermove', this.handleStatusSwipeMove, this);
+      this.input.off('pointerup', this.handleStatusSwipeEnd, this);
       destroySceneChildren(this);
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -225,6 +238,10 @@ export class BattleScene extends Phaser.Scene {
       }
     });
     this.setupKeyboardControls();
+    this.removeTouchControlsListener = onTouchControlsEnabledChange(() => this.render());
+    this.input.on('pointerdown', this.handleStatusSwipeStart, this);
+    this.input.on('pointermove', this.handleStatusSwipeMove, this);
+    this.input.on('pointerup', this.handleStatusSwipeEnd, this);
     this.playBattleBgm();
     this.render();
   }
@@ -2201,10 +2218,12 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private drawStatusProfileMemo(monster: RuntimeMonster): void {
-    const viewportX = 424;
-    const viewportY = 278;
-    const viewportWidth = 520;
-    const viewportHeight = 158;
+    const {
+      x: viewportX,
+      y: viewportY,
+      width: viewportWidth,
+      height: viewportHeight,
+    } = STATUS_PROFILE_VIEWPORT;
     const textWidth = 494;
     const gap = 10;
     const labels: Phaser.GameObjects.Text[] = [];
@@ -2268,6 +2287,37 @@ export class BattleScene extends Phaser.Scene {
     if (next === this.statusProfileScroll) return;
     this.statusProfileScroll = next;
     this.render();
+  }
+
+  private handleStatusSwipeStart(pointer: Phaser.Input.Pointer): void {
+    if (this.viewMode !== 'status' || this.statusTab !== 'profile') return;
+
+    const viewport = STATUS_PROFILE_VIEWPORT;
+    const insideViewport = pointer.x >= viewport.x
+      && pointer.x <= viewport.x + viewport.width
+      && pointer.y >= viewport.y
+      && pointer.y <= viewport.y + viewport.height;
+    if (!insideViewport) return;
+
+    this.statusSwipePointerId = pointer.id;
+    this.statusSwipeLastY = pointer.y;
+  }
+
+  private handleStatusSwipeMove(pointer: Phaser.Input.Pointer): void {
+    if (
+      pointer.id !== this.statusSwipePointerId
+      || this.statusSwipeLastY === undefined
+      || !pointer.isDown
+    ) return;
+
+    this.scrollStatusProfile(this.statusSwipeLastY - pointer.y);
+    this.statusSwipeLastY = pointer.y;
+  }
+
+  private handleStatusSwipeEnd(pointer: Phaser.Input.Pointer): void {
+    if (pointer.id !== this.statusSwipePointerId) return;
+    this.statusSwipePointerId = undefined;
+    this.statusSwipeLastY = undefined;
   }
 
   private drawStatusMoves(monster: RuntimeMonster): void {
@@ -2816,7 +2866,7 @@ export class BattleScene extends Phaser.Scene {
 
   // 가상 패드는 터치 기기에서만 그린다. 데스크톱에서도 그리면 대사·명령 버튼 위를 덮는다.
   private drawMobileOverlay(): void {
-    if (!this.mobileControlOverlayInteractive()) return;
+    if (!this.mobileControlOverlayInteractive() || !getTouchControlsEnabled()) return;
 
     const depth = 900;
     const dpadX = 118;

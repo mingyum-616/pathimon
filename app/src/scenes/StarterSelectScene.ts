@@ -145,28 +145,19 @@ export class StarterSelectScene extends Phaser.Scene {
       const monster = this.candidates[index];
       if (!monster) return;
       const active = !this.startCursor && this.slotCursor === index;
-      const chosen = this.selectedIds.includes(monster.id);
       if (active) {
         this.drawCursorMarker(slot.x, slot.markerY);
       }
 
       const spriteAssets = pathimonSpriteAssets(monster, this.visualStyle);
       const shadow = this.add.ellipse(slot.x, slot.y + 76, 104, 24, 0x12070b, 0.36);
-      shadow.setStrokeStyle(3, chosen ? COLORS.selected : active ? ACTIVE_LINE : 0x4a2a2a, chosen || active ? 0.9 : 0.22);
+      shadow.setStrokeStyle(3, active ? ACTIVE_LINE : 0x4a2a2a, active ? 0.9 : 0.22);
       this.add.image(slot.x, slot.y + 4, spriteAssets.front)
         .setOrigin(0.5)
         .setDisplaySize(active ? 106 : 96, active ? 106 : 96);
       this.add.image(slot.x, slot.y + 78, capsulePath)
         .setOrigin(0.5)
         .setDisplaySize(active ? 58 : 52, active ? 58 : 52);
-
-      // 선택 결과가 우측 패널 텍스트로만 바뀌면 어느 캡슐을 골랐는지 알기 어렵다.
-      if (chosen) {
-        this.add.rectangle(slot.x, slot.y + 10, 116, 116, COLORS.selected, 0.001)
-          .setStrokeStyle(3, COLORS.selected, 0.95);
-        const badge = this.add.circle(slot.x + 46, slot.y - 38, 15, COLORS.selected);
-        addLabel(this, badge.x, badge.y, '✓', TEXT.body).setOrigin(0.5).setColor('#10231a');
-      }
 
       const hit = this.add.rectangle(slot.x - 62, slot.y - 58, 124, 158, 0xffffff, 0.001).setOrigin(0);
       hit.setInteractive({ useHandCursor: true });

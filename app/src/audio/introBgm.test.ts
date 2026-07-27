@@ -10,4 +10,10 @@ describe('intro BGM helpers', () => {
     expect(introBgmSource).toContain('cache.audio.exists');
     expect(introBgmSource).toContain('loop: true');
   });
+
+  it('reuses the intro track as a slower and quieter ending arrangement', () => {
+    expect(introBgmSource).toContain('playEndingBgm');
+    expect(introBgmSource).toContain('rate: 0.92');
+    expect(introBgmSource).toContain('volume: 0.22');
+  });
 });

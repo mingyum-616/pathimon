@@ -3,6 +3,12 @@ import { getAudioMuted, onAudioMutedChange, toggleAudioMuted } from '../audio/au
 import { FONT_FAMILY } from '../game/constants';
 import { openRunSaveDialog } from '../save/runSaveUi';
 import { gameGuideContent } from './gameGuideUi';
+import { isTouchCapable } from './mobileLayout';
+import {
+  getTouchControlsEnabled,
+  onTouchControlsEnabledChange,
+  toggleTouchControlsEnabled,
+} from './touchControls';
 
 const CONTROL_RAIL_WIDTH = 50;
 const OUTSIDE_GUTTER_REQUIRED = 62;
@@ -13,11 +19,20 @@ export interface GlobalControlPosition {
   top: number;
 }
 
-export function globalControlLabels(): { guide: string; mute: string; save: string; unmute: string } {
+export function globalControlLabels(): {
+  guide: string;
+  mute: string;
+  save: string;
+  touchHide: string;
+  touchShow: string;
+  unmute: string;
+} {
   return {
     guide: '전투 안내 열기',
     mute: '음소거',
     save: '저장 및 불러오기',
+    touchHide: '터치 조작 숨기기',
+    touchShow: '터치 조작 표시',
     unmute: '소리 켜기',
   };
 }
@@ -142,6 +157,13 @@ export function mountGlobalControls(game: Phaser.Game): () => void {
   const muteButton = createButton(labels.mute, '🔊');
   const guideButton = createButton(labels.guide, '▤');
   const saveButton = createButton(labels.save, '💾');
+  const touchButton = createButton(labels.touchHide, '🎮');
+  const touchCapable = isTouchCapable({
+    hasTouch: game.device.input.touch,
+    coarsePointer: typeof window.matchMedia === 'function'
+      && window.matchMedia('(pointer: coarse)').matches,
+    maxTouchPoints: navigator.maxTouchPoints ?? 0,
+  });
   Object.assign(container.style, {
     background: 'rgba(17, 23, 34, 0.82)',
     border: '1px solid rgba(114, 214, 255, 0.32)',
@@ -152,6 +174,9 @@ export function mountGlobalControls(game: Phaser.Game): () => void {
     zIndex: '10010',
   });
   container.append(muteButton, guideButton, saveButton);
+  if (touchCapable) {
+    container.append(touchButton);
+  }
   document.body.appendChild(container);
 
   const syncMute = (muted: boolean): void => {
@@ -162,6 +187,15 @@ export function mountGlobalControls(game: Phaser.Game): () => void {
   };
   const removeMuteListener = onAudioMutedChange(syncMute);
   syncMute(getAudioMuted());
+
+  const syncTouchControls = (enabled: boolean): void => {
+    touchButton.ariaLabel = enabled ? labels.touchHide : labels.touchShow;
+    touchButton.title = touchButton.ariaLabel;
+    touchButton.setAttribute('aria-pressed', String(enabled));
+    touchButton.style.opacity = enabled ? '1' : '0.48';
+  };
+  const removeTouchListener = onTouchControlsEnabledChange(syncTouchControls);
+  syncTouchControls(getTouchControlsEnabled());
 
   muteButton.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -174,6 +208,10 @@ export function mountGlobalControls(game: Phaser.Game): () => void {
   saveButton.addEventListener('click', (event) => {
     event.stopPropagation();
     openRunSaveDialog(game);
+  });
+  touchButton.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleTouchControlsEnabled();
   });
 
   const positionControls = (): void => {
@@ -197,6 +235,7 @@ export function mountGlobalControls(game: Phaser.Game): () => void {
     resizeObserver?.disconnect();
     window.removeEventListener('resize', positionControls);
     removeMuteListener();
+    removeTouchListener();
     container.remove();
   };
 }

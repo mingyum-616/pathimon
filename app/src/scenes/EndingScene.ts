@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { playEndingBgm, queueIntroBgm, stopIntroBgm } from '../audio/introBgm';
 import {
   clearEndingFeedbackDraft,
   loadEndingFeedbackDraft,
@@ -13,6 +14,11 @@ import {
   type EndingFeedbackTextareaHandle,
 } from '../ui/endingFeedbackOverlay';
 import { EndingFeedbackSubmissionEpoch } from '../ui/endingFeedbackSubmission';
+import {
+  ENDING_CREDITS,
+  ENDING_CREDITS_DURATION_MS,
+  ENDING_FINAL_COPY,
+} from '../ui/endingCredits';
 import { ENDING_PAGES, endingRosterEntries, type EndingRosterEntry } from '../ui/endingUi';
 import { keyboardCommand } from '../ui/keyboard';
 import { advanceTypewriter } from '../ui/typewriter';
@@ -26,6 +32,8 @@ type EndingPage =
   | { page: 'congratulations' }
   | { page: 'roster' }
   | { page: 'epilogue' }
+  | { page: 'credits' }
+  | { page: 'curtainFinal' }
   | { page: 'feedback' }
   | { page: 'thanks' };
 
@@ -52,6 +60,7 @@ export class EndingScene extends Phaser.Scene {
   private submitting = false;
   private submission = new EndingFeedbackSubmissionEpoch();
   private feedbackAbortController?: AbortController;
+  private creditsTween?: Phaser.Tweens.Tween;
   private cleanedUp = false;
 
   constructor() {
@@ -77,10 +86,12 @@ export class EndingScene extends Phaser.Scene {
     this.feedbackNotice = undefined;
     this.submitting = false;
     this.feedbackAbortController = undefined;
+    this.creditsTween = undefined;
     this.cleanedUp = false;
   }
 
   preload(): void {
+    queueIntroBgm(this);
     for (const entry of this.roster) {
       if (!this.textures.exists(entry.assetPath)) {
         this.load.image(entry.assetPath, entry.assetPath);
@@ -89,6 +100,7 @@ export class EndingScene extends Phaser.Scene {
   }
 
   create(): void {
+    playEndingBgm(this);
     this.render();
     this.input.on('pointerdown', this.handleScenePointerDown, this);
     this.input.keyboard?.on('keydown', this.handleKeyboardDown);
@@ -98,6 +110,7 @@ export class EndingScene extends Phaser.Scene {
 
   private render(): void {
     this.stopTyping();
+    this.stopCredits();
     this.children.removeAll(true);
     this.dialogueText = undefined;
     this.add.rectangle(0, 0, APP_WIDTH, APP_HEIGHT, COLORS.ink).setOrigin(0);
@@ -111,6 +124,12 @@ export class EndingScene extends Phaser.Scene {
         return;
       case 'epilogue':
         this.drawEpiloguePage();
+        return;
+      case 'credits':
+        this.drawCreditsPage();
+        return;
+      case 'curtainFinal':
+        this.drawCurtainFinalPage();
         return;
       case 'feedback':
         this.drawFeedbackPage();
@@ -154,6 +173,123 @@ export class EndingScene extends Phaser.Scene {
       .setColor('#d8cde6');
     this.drawDialoguePanel();
     this.startTyping();
+  }
+
+  private drawCreditsPage(): void {
+    this.drawCurtainBackdrop();
+
+    const container = this.add.container(APP_WIDTH / 2, APP_HEIGHT + 60).setDepth(2);
+    let y = 0;
+
+    const title = addLabel(this, 0, y, 'PATHIMON', 34)
+      .setOrigin(0.5)
+      .setColor('#ffd56a');
+    container.add(title);
+    y += 72;
+
+    for (const entry of ENDING_CREDITS) {
+      const isAdvice = entry.role === '조언';
+      const role = addLabel(this, 0, y, entry.role, TEXT.caption)
+        .setOrigin(0.5)
+        .setColor(isAdvice ? '#ffd56a' : '#a8b4c8');
+      const names = addBoxLabel(this, 0, y + 22, entry.names, {
+        align: 'center',
+        color: isAdvice ? '#ffe59a' : COLORS.text,
+        height: 30,
+        maxLines: 1,
+        minSize: TEXT.label,
+        origin: [0.5, 0],
+        size: TEXT.body,
+        width: 720,
+      });
+      container.add([role, names]);
+      y += 62;
+    }
+
+    addLabel(this, 946, 32, '눌러서 넘기기', TEXT.caption)
+      .setOrigin(1, 0)
+      .setAlpha(0.58)
+      .setDepth(7);
+
+    this.creditsTween = this.tweens.add({
+      targets: container,
+      y: -y - 40,
+      duration: ENDING_CREDITS_DURATION_MS,
+      ease: 'Linear',
+      onComplete: () => {
+        if (this.page.page === 'credits') {
+          this.showCurtainFinal();
+        }
+      },
+    });
+  }
+
+  private drawCurtainFinalPage(): void {
+    this.drawCurtainBackdrop();
+    addLabel(this, APP_WIDTH / 2, 128, ENDING_FINAL_COPY.lead, TEXT.heading)
+      .setOrigin(0.5)
+      .setColor('#a8b4c8');
+    addBoxLabel(this, APP_WIDTH / 2, 180, ENDING_FINAL_COPY.hero, {
+      align: 'center',
+      color: '#fff5dc',
+      height: 60,
+      maxLines: 2,
+      minSize: TEXT.title,
+      origin: [0.5, 0],
+      size: 34,
+      width: 760,
+    });
+    addBoxLabel(this, APP_WIDTH / 2, 324, ENDING_FINAL_COPY.cheer, {
+      align: 'center',
+      color: '#ffd56a',
+      height: 62,
+      maxLines: 2,
+      minSize: TEXT.title,
+      origin: [0.5, 0],
+      size: 38,
+      width: 760,
+    });
+    addLabel(this, APP_WIDTH / 2, 430, '▼', TEXT.heading).setOrigin(0.5).setAlpha(0.78);
+  }
+
+  private drawCurtainBackdrop(): void {
+    this.add.rectangle(0, 0, APP_WIDTH, APP_HEIGHT, 0x12101b).setOrigin(0);
+    this.add.rectangle(0, 0, APP_WIDTH, 48, 0x641f2a).setOrigin(0).setDepth(5);
+    this.add.rectangle(0, 45, APP_WIDTH, 4, 0xd6a24d).setOrigin(0).setDepth(6);
+    this.add.rectangle(0, 0, 96, APP_HEIGHT, 0x5c1d29).setOrigin(0).setDepth(5);
+    this.add.rectangle(APP_WIDTH - 96, 0, 96, APP_HEIGHT, 0x5c1d29).setOrigin(0).setDepth(5);
+    for (let y = 58; y < APP_HEIGHT; y += 58) {
+      this.add.rectangle(18, y, 62, 28, 0x812c38, 0.58).setOrigin(0).setDepth(6);
+      this.add.rectangle(APP_WIDTH - 80, y, 62, 28, 0x812c38, 0.58).setOrigin(0).setDepth(6);
+    }
+    this.add.rectangle(0, 486, APP_WIDTH, 90, 0x381823).setOrigin(0).setDepth(5);
+    this.add.rectangle(0, 486, APP_WIDTH, 4, 0xd6a24d).setOrigin(0).setDepth(6);
+    this.drawCurtainRoster();
+  }
+
+  private drawCurtainRoster(): void {
+    const count = this.roster.length;
+    const startX = count > 1 ? 280 : APP_WIDTH / 2;
+    const gap = count > 1 ? 464 / (count - 1) : 0;
+
+    this.roster.forEach((entry, index) => {
+      const x = startX + gap * index;
+      if (!this.textures.exists(entry.assetPath)) return;
+
+      const frame = this.textures.getFrame(entry.assetPath);
+      const crop = entry.spriteCrop;
+      const scale = Math.min(
+        66 / Math.max(1, crop?.width ?? frame?.width ?? 96),
+        66 / Math.max(1, crop?.height ?? frame?.height ?? 96),
+      );
+      const sprite = this.add.image(x, 560 - (index % 2) * 5, entry.assetPath)
+        .setOrigin(0.5, 1)
+        .setDepth(7);
+      if (crop) {
+        sprite.setCrop(crop.frontX, 0, crop.width, crop.height);
+      }
+      sprite.setScale(scale);
+    });
   }
 
   private drawRoster(): void {
@@ -279,6 +415,14 @@ export class EndingScene extends Phaser.Scene {
   private handleScenePointerDown(): void {
     if (this.page.page === 'congratulations' || this.page.page === 'roster' || this.page.page === 'epilogue') {
       this.advanceDialogue();
+      return;
+    }
+    if (this.page.page === 'credits') {
+      this.showCurtainFinal();
+      return;
+    }
+    if (this.page.page === 'curtainFinal') {
+      this.showFeedback();
     }
   }
 
@@ -307,6 +451,18 @@ export class EndingScene extends Phaser.Scene {
       if (command === 'confirm') {
         event.preventDefault();
         this.returnToTitle();
+      }
+      return;
+    }
+
+    if (this.page.page === 'credits' || this.page.page === 'curtainFinal') {
+      if (command === 'confirm') {
+        event.preventDefault();
+        if (this.page.page === 'credits') {
+          this.showCurtainFinal();
+        } else {
+          this.showFeedback();
+        }
       }
       return;
     }
@@ -346,6 +502,16 @@ export class EndingScene extends Phaser.Scene {
       this.showDialoguePage('epilogue');
       return;
     }
+    this.page = { page: 'credits' };
+    this.render();
+  }
+
+  private showCurtainFinal(): void {
+    this.page = { page: 'curtainFinal' };
+    this.render();
+  }
+
+  private showFeedback(): void {
     this.page = { page: 'feedback' };
     this.render();
   }
@@ -380,6 +546,11 @@ export class EndingScene extends Phaser.Scene {
   private stopTyping(): void {
     this.typewriterTimer?.remove(false);
     this.typewriterTimer = undefined;
+  }
+
+  private stopCredits(): void {
+    this.creditsTween?.stop();
+    this.creditsTween = undefined;
   }
 
   private updateDialogueText(): void {
@@ -447,12 +618,14 @@ export class EndingScene extends Phaser.Scene {
     this.cancelFeedbackSubmission();
     clearEndingFeedbackDraft();
     this.destroyTextarea();
+    stopIntroBgm(this);
     this.scene.start('TitleScene');
   }
 
   private returnToTitle(): void {
     this.cancelFeedbackSubmission();
     this.destroyTextarea();
+    stopIntroBgm(this);
     this.scene.start('TitleScene');
   }
 
@@ -473,6 +646,8 @@ export class EndingScene extends Phaser.Scene {
     this.cleanedUp = true;
     this.cancelFeedbackSubmission();
     this.stopTyping();
+    this.stopCredits();
+    stopIntroBgm(this);
     this.input.off('pointerdown', this.handleScenePointerDown, this);
     this.input.keyboard?.off('keydown', this.handleKeyboardDown);
     this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);

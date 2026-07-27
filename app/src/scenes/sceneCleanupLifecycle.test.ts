@@ -70,8 +70,18 @@ describe('scene cleanup lifecycle wiring', () => {
 
   it('draws the virtual pad only on touch devices', () => {
     expect(battleSceneSource).toMatch(
-      /private drawMobileOverlay\(\): void \{\s*if \(!this\.mobileControlOverlayInteractive\(\)\) return;/,
+      /private drawMobileOverlay\(\): void \{\s*if \(!this\.mobileControlOverlayInteractive\(\) \|\| !getTouchControlsEnabled\(\)\) return;/,
     );
+    expect(battleSceneSource).toContain('onTouchControlsEnabledChange');
+    expect(battleSceneSource).toContain('this.removeTouchControlsListener?.()');
+  });
+
+  it('scrolls the status profile with a vertical touch swipe and cleans up input listeners', () => {
+    expect(battleSceneSource).toContain("this.input.on('pointerdown', this.handleStatusSwipeStart, this)");
+    expect(battleSceneSource).toContain("this.input.on('pointermove', this.handleStatusSwipeMove, this)");
+    expect(battleSceneSource).toContain("this.input.on('pointerup', this.handleStatusSwipeEnd, this)");
+    expect(battleSceneSource).toContain('this.scrollStatusProfile(this.statusSwipeLastY - pointer.y)');
+    expect(battleSceneSource).toContain("this.input.off('pointermove', this.handleStatusSwipeMove, this)");
   });
 
   it('loads and draws party thumbnails in targeted shop item lists', () => {

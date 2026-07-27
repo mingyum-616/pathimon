@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 import endingSceneSource from './EndingScene.ts?raw';
 
 describe('EndingScene', () => {
-  it('shows four ending pages and types dialogue at 24ms', () => {
+  it('shows the ending story, curtain call, and feedback while typing dialogue at 24ms', () => {
     expect(endingSceneSource).toContain('CONGRATULATIONS!');
     expect(endingSceneSource).toContain('const TYPEWRITER_INTERVAL_MS = 24');
+    expect(endingSceneSource).toContain("page: 'credits'");
+    expect(endingSceneSource).toContain("page: 'curtainFinal'");
     expect(endingSceneSource).toContain("page: 'feedback'");
+    expect(endingSceneSource).toContain('ENDING_CREDITS_DURATION_MS');
+    expect(endingSceneSource).toContain('playEndingBgm(this)');
   });
 
   it('requires a rating and preserves feedback on failed submission', () => {
