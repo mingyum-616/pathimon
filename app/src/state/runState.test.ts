@@ -280,6 +280,29 @@ describe('run state loop', () => {
     expect(challengeBattle.party[0].hp).toBe(1);
   });
 
+  it('sends out a living replacement when the previous lead has fainted', () => {
+    const state = createInitialRunState('challenge');
+    state.party[0].hp = 0;
+    state.party[0].fainted = true;
+    state.party.push(createMonsterInstance(NOTE_MONSTERS_NEWEST_FIRST[1]));
+
+    const battle = enterBattle(state);
+
+    expect(battle.activeIndex).toBe(1);
+    expect(battle.party[battle.activeIndex].hp).toBeGreaterThan(0);
+  });
+
+  it('does not enter another floor when every party member has fainted', () => {
+    const state = createInitialRunState('challenge');
+    state.party[0].hp = 0;
+    state.party[0].fainted = true;
+
+    const battle = enterBattle(state);
+
+    expect(battle.phase).toBe('defeat');
+    expect(battle.enemy).toBeNull();
+  });
+
   it('resets once-per-battle signature use when a new battle starts', () => {
     const challenge = createInitialRunState('challenge');
     challenge.party[0].usedSignatureMoveIds = ['capsule_formation'];

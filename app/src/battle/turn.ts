@@ -225,6 +225,11 @@ function setWinState(state: RunState, message: string, _learningDetail?: string,
   const party = shouldHealLearningParty
     ? finishedParty.map((monster) => ({ ...monster, hp: monster.maxHp, fainted: false }))
     : finishedParty;
+  const activeMonster = party[state.activeIndex];
+
+  if (activeMonster && !party.some(canEnterBattle)) {
+    return setCollapsedState({ ...state, party }, activeMonster);
+  }
 
   return {
     ...state,

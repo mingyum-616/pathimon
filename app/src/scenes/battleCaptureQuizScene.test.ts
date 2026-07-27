@@ -13,6 +13,12 @@ describe('BattleScene capture quiz and first trainer guidance', () => {
     expect(battleSceneSource).toContain('오답 시 최대 체력');
   });
 
+  it('keeps rapid extra throws cosmetic without consuming another capsule', () => {
+    expect(battleSceneSource).toMatch(
+      /private handleCapsuleThrow[\s\S]*?if \(this\.isAnimating\) \{[\s\S]*?playCapsuleThrow\(capsuleId,[\s\S]*?return;[\s\S]*?beginCaptureQuiz/,
+    );
+  });
+
   it('keeps the thrown capsule slightly smaller than the previous battle effect', () => {
     expect(battleSceneSource).toMatch(
       /private playCapsuleThrow[\s\S]*?\.setScale\(0\.64\)/,

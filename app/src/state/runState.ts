@@ -143,6 +143,10 @@ function clampActiveIndex(activeIndex: number, partyLength: number): number {
   return Math.min(Math.max(0, partyLength - 1), Math.max(0, activeIndex));
 }
 
+function canLeadNextEncounter(monster: RuntimeMonster | undefined): boolean {
+  return Boolean(monster && monster.hp > 0 && !monster.fainted && !monster.sealedByBoss);
+}
+
 function createBgmSeed(random: () => number): number {
   return Math.floor(random() * 0x100000000);
 }
@@ -234,6 +238,16 @@ export function enterBattle(state: RunState, enemyIndex?: number): RunState {
     battleStatUpCue: undefined,
     pendingSwitchAttackReward: undefined,
   };
+
+  if (!canLeadNextEncounter(nextState.party[nextState.activeIndex])) {
+    const replacementIndex = nextState.party.findIndex(canLeadNextEncounter);
+    if (replacementIndex < 0) {
+      nextState.phase = 'defeat';
+      nextState.lastLog = '더 이상 전투 가능한 패시몬이 없습니다.';
+      return nextState;
+    }
+    nextState.activeIndex = replacementIndex;
+  }
 
   if (nextState.encounterKind === 'boss') {
     const bossIndex = selectBossIndex(enemyIndex, nextState.floor, nextState.bossRosterIds);

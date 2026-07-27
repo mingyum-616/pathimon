@@ -2570,6 +2570,11 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private handleCapsuleThrow(capsuleId: CapsuleId): void {
+    if (this.isAnimating) {
+      this.playCapsuleThrow(capsuleId, () => undefined);
+      return;
+    }
+
     const enemy = this.state.enemy;
     const quizState = beginCaptureQuiz(this.state, capsuleId);
     this.state = quizState;

@@ -770,6 +770,33 @@ describe('battle engine', () => {
     expect(result.enemy?.hp).toBeLessThan(999);
   });
 
+  it('does not award a floor clear when the last pathimon faints with the enemy', () => {
+    const battle = createBattleState({
+      party: [createMonster({
+        hp: 1,
+        maxHp: 44,
+        moveset: ['alpha_toxin'],
+        statusConditions: { cough: 1 },
+      })],
+      enemy: createMonster({
+        name: '면역챔피언',
+        category: '보스 사람',
+        moveset: ['m_phago'],
+        moveSlots: ['m_phago', null, null, null],
+        isBoss: true,
+        isTrainer: true,
+        hp: 1,
+        maxHp: 999,
+      }),
+    });
+
+    const result = resolvePlayerMove(battle, 'alpha_toxin', 1, 0, 0);
+
+    expect(result.party[0].hp).toBe(0);
+    expect(result.enemy?.hp).toBe(0);
+    expect(result.phase).toBe('defeat');
+  });
+
   it('puts learning feedback in the combat message only in learning mode', () => {
     const learningBattle = createBattleState({
       mode: 'learning',
