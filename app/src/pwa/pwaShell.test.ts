@@ -36,4 +36,10 @@ describe('PWA application shell', () => {
     expect(indexHtml).toContain('env(safe-area-inset-top)');
     expect(indexHtml).toContain('env(safe-area-inset-left)');
   });
+
+  it('stretches the fixed game canvas across landscape touch screens', () => {
+    expect(indexHtml).toContain('body.pathimon-touch-landscape #game canvas');
+    expect(indexHtml).toContain('width: 100% !important');
+    expect(indexHtml).toContain('height: 100% !important');
+  });
 });

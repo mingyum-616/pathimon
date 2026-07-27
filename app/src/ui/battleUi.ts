@@ -348,7 +348,12 @@ export function pathimonSpriteAssets(monster: PathimonSpriteSource, visualStyle:
 
 export function combatSpriteScale(monster: RuntimeMonster, baseScale: number): number {
   const trainerScale = monster.isTrainer ? 2.75 : baseScale;
-  return monster.isBoss && monster.bossPhase2Activated ? trainerScale * 1.2 : trainerScale;
+  const bossScale = monster.isBoss && monster.bossPhase2Activated ? trainerScale * 1.2 : trainerScale;
+  const parasiteCategories = ['연충', '선충', '흡충', '조충', '기생충'];
+  if (!parasiteCategories.includes(monster.category)) return bossScale;
+  if (monster.name.endsWith('-충란')) return bossScale * 0.9;
+  if (monster.name.endsWith('-성충')) return bossScale * 1.1;
+  return bossScale;
 }
 
 export function pathimonTypeBorderColor(monster: RuntimeMonster, mode: RunMode): number | undefined {
@@ -453,6 +458,34 @@ export function mobileHomeButtonLayout(): LabeledButtonLayout {
     width: 108,
     height: 28,
     label: '처음으로',
+  };
+}
+
+export interface MobileControlOverlayLayout {
+  actionA: { radius: number; x: number; y: number };
+  actionB: { radius: number; x: number; y: number };
+  dpad: {
+    armLength: number;
+    hitSize: number;
+    step: number;
+    thickness: number;
+    x: number;
+    y: number;
+  };
+}
+
+export function mobileControlOverlayLayout(): MobileControlOverlayLayout {
+  return {
+    dpad: {
+      x: 110,
+      y: 470,
+      armLength: 196,
+      thickness: 64,
+      step: 62,
+      hitSize: 68,
+    },
+    actionA: { x: 904, y: 430, radius: 58 },
+    actionB: { x: 810, y: 504, radius: 52 },
   };
 }
 

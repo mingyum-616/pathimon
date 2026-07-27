@@ -18,6 +18,40 @@ describe('mobile layout', () => {
     expect(shouldShowRotateOverlay(touch, 844, 390)).toBe(false);
   });
 
+  it('fills a landscape touch viewport and refreshes Phaser pointer scaling', () => {
+    const originalMatchMedia = window.matchMedia;
+    const width = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+    const height = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+    const touchPoints = Object.getOwnPropertyDescriptor(navigator, 'maxTouchPoints');
+    const canvas = document.createElement('canvas');
+    const refresh = vi.fn();
+
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: vi.fn(() => ({ matches: true })),
+    });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 932 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 430 });
+    Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, value: 5 });
+
+    const cleanup = mountMobileLayout({ canvas, scale: { refresh } } as unknown as Phaser.Game);
+
+    expect(document.body.classList.contains('pathimon-touch-landscape')).toBe(true);
+    expect(refresh).toHaveBeenCalled();
+
+    cleanup();
+    expect(document.body.classList.contains('pathimon-touch-landscape')).toBe(false);
+
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: originalMatchMedia });
+    Object.defineProperty(window, 'innerWidth', width!);
+    Object.defineProperty(window, 'innerHeight', height!);
+    if (touchPoints) {
+      Object.defineProperty(navigator, 'maxTouchPoints', touchPoints);
+    } else {
+      Reflect.deleteProperty(navigator, 'maxTouchPoints');
+    }
+  });
+
   it('blocks portrait touch input even when orientation locking is unavailable', () => {
     const originalMatchMedia = window.matchMedia;
     const width = Object.getOwnPropertyDescriptor(window, 'innerWidth');

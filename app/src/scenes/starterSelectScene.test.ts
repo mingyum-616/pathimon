@@ -23,14 +23,11 @@ describe('StarterSelectScene audio', () => {
     expect(starterSelectSceneSource).toContain('pathimonSpriteAssets');
     expect(starterSelectSceneSource).toContain('this.candidates.forEach');
     expect(starterSelectSceneSource).toContain('const spriteAssets = pathimonSpriteAssets(monster, this.visualStyle);');
-    expect(starterSelectSceneSource).toContain('.setDisplaySize(active ? 106 : 96, active ? 106 : 96)');
+    expect(starterSelectSceneSource).toContain('.setDisplaySize(visual.spriteSize, visual.spriteSize)');
   });
 
-  it('uses only the moving focus marker instead of a fixed selected badge', () => {
-    expect(starterSelectSceneSource).not.toContain('if (chosen)');
-    expect(starterSelectSceneSource).not.toContain('const badge = this.add.circle');
-    expect(starterSelectSceneSource).toContain(
-      'shadow.setStrokeStyle(3, active ? ACTIVE_LINE : 0x4a2a2a, active ? 0.9 : 0.22);',
-    );
+  it('keeps a white selected outline after focus moves to the start button', () => {
+    expect(starterSelectSceneSource).toContain('starterSlotVisual(active, chosen)');
+    expect(starterSelectSceneSource).toContain('visual.selectedOutline ? 0xffffff');
   });
 });

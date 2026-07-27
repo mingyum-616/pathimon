@@ -78,6 +78,8 @@ describe('scene cleanup lifecycle wiring', () => {
     );
     expect(battleSceneSource).toContain('onTouchControlsEnabledChange');
     expect(battleSceneSource).toContain('this.removeTouchControlsListener?.()');
+    expect(battleSceneSource).toContain('const layout = mobileControlOverlayLayout();');
+    expect(battleSceneSource).toContain('this.spriteScaleFor(player, spriteLayout.player.scale)');
   });
 
   it('scrolls the status profile with a vertical touch swipe and cleans up input listeners', () => {

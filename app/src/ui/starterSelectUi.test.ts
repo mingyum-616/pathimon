@@ -9,6 +9,7 @@ import {
   starterCapsuleSlots,
   starterChoiceSummary,
   starterSelectCopy,
+  starterSlotVisual,
 } from './starterSelectUi';
 
 describe('starter select UI helpers', () => {
@@ -62,5 +63,18 @@ describe('starter select UI helpers', () => {
     expect(slots).toHaveLength(3);
     expect(slots.map((slot) => slot.markerY)).toEqual([206, 206, 206]);
     expect(slots.map((slot) => slot.x)).toEqual([356, 512, 668]);
+  });
+
+  it('keeps a selected starter visibly enlarged after focus moves to the start button', () => {
+    expect(starterSlotVisual(false, true)).toMatchObject({
+      capsuleSize: 56,
+      selectedOutline: true,
+      spriteSize: 104,
+    });
+    expect(starterSlotVisual(false, false)).toMatchObject({
+      capsuleSize: 52,
+      selectedOutline: false,
+      spriteSize: 96,
+    });
   });
 });

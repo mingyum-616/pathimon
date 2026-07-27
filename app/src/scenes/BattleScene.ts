@@ -69,6 +69,7 @@ import {
   lockedMoveOverlayPath,
   matchupGateCopy,
   mobileControlOverlayInteractive,
+  mobileControlOverlayLayout,
   mobileHomeButtonLayout,
   monsterStatLine,
   shouldGateMatchupTable,
@@ -472,7 +473,7 @@ export class BattleScene extends Phaser.Scene {
       playerAssets.back,
       spriteLayout.player.x,
       spriteLayout.player.y,
-      spriteLayout.player.scale,
+      this.spriteScaleFor(player, spriteLayout.player.scale),
       'back',
     );
   }
@@ -2870,20 +2871,20 @@ export class BattleScene extends Phaser.Scene {
     if (!this.mobileControlOverlayInteractive() || !getTouchControlsEnabled()) return;
 
     const depth = 900;
-    const dpadX = 118;
-    const dpadY = 500;
+    const layout = mobileControlOverlayLayout();
+    const dpad = layout.dpad;
 
-    this.add.rectangle(dpadX, dpadY, 172, 54, OVERLAY_FILL, 0.24).setDepth(depth);
-    this.add.rectangle(dpadX, dpadY, 54, 172, OVERLAY_FILL, 0.24).setDepth(depth);
-    this.add.rectangle(dpadX, dpadY, 54, 54, OVERLAY_FILL, 0.16).setDepth(depth);
+    this.add.rectangle(dpad.x, dpad.y, dpad.armLength, dpad.thickness, OVERLAY_FILL, 0.24).setDepth(depth);
+    this.add.rectangle(dpad.x, dpad.y, dpad.thickness, dpad.armLength, OVERLAY_FILL, 0.24).setDepth(depth);
+    this.add.rectangle(dpad.x, dpad.y, dpad.thickness, dpad.thickness, OVERLAY_FILL, 0.16).setDepth(depth);
 
-    this.drawOverlayHitArea(dpadX, dpadY - 58, 58, 58, 'up', '↑', depth + 1);
-    this.drawOverlayHitArea(dpadX, dpadY + 58, 58, 58, 'down', '↓', depth + 1);
-    this.drawOverlayHitArea(dpadX - 58, dpadY, 58, 58, 'left', '←', depth + 1);
-    this.drawOverlayHitArea(dpadX + 58, dpadY, 58, 58, 'right', '→', depth + 1);
+    this.drawOverlayHitArea(dpad.x, dpad.y - dpad.step, dpad.hitSize, dpad.hitSize, 'up', '↑', depth + 1);
+    this.drawOverlayHitArea(dpad.x, dpad.y + dpad.step, dpad.hitSize, dpad.hitSize, 'down', '↓', depth + 1);
+    this.drawOverlayHitArea(dpad.x - dpad.step, dpad.y, dpad.hitSize, dpad.hitSize, 'left', '←', depth + 1);
+    this.drawOverlayHitArea(dpad.x + dpad.step, dpad.y, dpad.hitSize, dpad.hitSize, 'right', '→', depth + 1);
 
-    this.drawActionOverlayButton(896, 452, 48, 'A', () => this.handleConfirmInput(), depth + 1);
-    this.drawActionOverlayButton(802, 510, 44, 'B', () => this.handleCancelInput(), depth + 1);
+    this.drawActionOverlayButton(layout.actionA.x, layout.actionA.y, layout.actionA.radius, 'A', () => this.handleConfirmInput(), depth + 1);
+    this.drawActionOverlayButton(layout.actionB.x, layout.actionB.y, layout.actionB.radius, 'B', () => this.handleCancelInput(), depth + 1);
   }
 
   // 파티·스테이터스 화면에는 자체 복귀 버튼이 있어 겹침을 피하려 전투 화면에서만 띄운다.

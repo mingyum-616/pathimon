@@ -37,6 +37,7 @@ import {
   hpPercentLabel,
   lockedMoveOverlayPath,
   mobileControlOverlayInteractive,
+  mobileControlOverlayLayout,
   mobileHomeButtonLayout,
   monsterStatLine,
   normalizedSpriteScale,
@@ -174,6 +175,25 @@ describe('battle UI helpers', () => {
 
     expect(combatSpriteScale(trainer, 2.5)).toBe(2.75);
     expect(combatSpriteScale(createMonster(), 2.5)).toBe(2.5);
+  });
+
+  it('grows parasite sprites a little at each evolution stage', () => {
+    const egg = createMonster({ category: '조충', name: '나나조충-충란' });
+    const larva = createMonster({ category: '조충', name: '나나조충-유충' });
+    const adult = createMonster({ category: '조충', name: '나나조충-성충' });
+
+    expect(combatSpriteScale(egg, 2.5)).toBeCloseTo(2.25);
+    expect(combatSpriteScale(larva, 2.5)).toBeCloseTo(2.5);
+    expect(combatSpriteScale(adult, 2.5)).toBeCloseTo(2.75);
+  });
+
+  it('keeps mobile battle controls large enough for fingers', () => {
+    const layout = mobileControlOverlayLayout();
+
+    expect(layout.dpad.hitSize).toBeGreaterThanOrEqual(68);
+    expect(layout.actionA.radius).toBeGreaterThanOrEqual(58);
+    expect(layout.actionB.radius).toBeGreaterThanOrEqual(52);
+    expect(layout.dpad.y + layout.dpad.step + layout.dpad.hitSize / 2).toBeLessThanOrEqual(576);
   });
 
   it('uses capsule-derived pathimon type border colors only in challenge mode', () => {

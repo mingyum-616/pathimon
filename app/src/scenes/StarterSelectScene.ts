@@ -16,6 +16,7 @@ import {
   starterCapsuleSlots,
   starterChoiceSummary,
   starterSelectCopy,
+  starterSlotVisual,
 } from '../ui/starterSelectUi';
 import { destroySceneChildren } from '../ui/sceneCleanup';
 
@@ -145,19 +146,29 @@ export class StarterSelectScene extends Phaser.Scene {
       const monster = this.candidates[index];
       if (!monster) return;
       const active = !this.startCursor && this.slotCursor === index;
+      const chosen = this.selectedIds.includes(monster.id);
+      const visual = starterSlotVisual(active, chosen);
       if (active) {
         this.drawCursorMarker(slot.x, slot.markerY);
       }
 
       const spriteAssets = pathimonSpriteAssets(monster, this.visualStyle);
       const shadow = this.add.ellipse(slot.x, slot.y + 76, 104, 24, 0x12070b, 0.36);
-      shadow.setStrokeStyle(3, active ? ACTIVE_LINE : 0x4a2a2a, active ? 0.9 : 0.22);
+      shadow.setStrokeStyle(
+        3,
+        active ? ACTIVE_LINE : visual.selectedOutline ? 0xffffff : 0x4a2a2a,
+        active || visual.selectedOutline ? 0.9 : 0.22,
+      );
+      if (visual.selectedOutline) {
+        this.add.circle(slot.x, slot.y + 4, visual.spriteSize / 2 + 4, 0xffffff, 0)
+          .setStrokeStyle(3, 0xffffff, 0.9);
+      }
       this.add.image(slot.x, slot.y + 4, spriteAssets.front)
         .setOrigin(0.5)
-        .setDisplaySize(active ? 106 : 96, active ? 106 : 96);
+        .setDisplaySize(visual.spriteSize, visual.spriteSize);
       this.add.image(slot.x, slot.y + 78, capsulePath)
         .setOrigin(0.5)
-        .setDisplaySize(active ? 58 : 52, active ? 58 : 52);
+        .setDisplaySize(visual.capsuleSize, visual.capsuleSize);
 
       const hit = this.add.rectangle(slot.x - 62, slot.y - 58, 124, 158, 0xffffff, 0.001).setOrigin(0);
       hit.setInteractive({ useHandCursor: true });

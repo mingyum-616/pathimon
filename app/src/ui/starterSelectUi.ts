@@ -19,6 +19,12 @@ export interface StarterChoiceSummary {
   title: string;
 }
 
+export interface StarterSlotVisual {
+  capsuleSize: number;
+  selectedOutline: boolean;
+  spriteSize: number;
+}
+
 export function starterSelectCopy(): StarterSelectCopy {
   return {
     prompt: '함께할 패시몬을 선택해주세요',
@@ -56,6 +62,14 @@ export function starterCapsuleSlots(): StarterCapsuleSlot[] {
     { x: 512, y: 248, markerY: 206 },
     { x: 668, y: 248, markerY: 206 },
   ];
+}
+
+export function starterSlotVisual(focused: boolean, selected: boolean): StarterSlotVisual {
+  return {
+    capsuleSize: focused ? 58 : selected ? 56 : 52,
+    selectedOutline: selected,
+    spriteSize: focused ? 106 : selected ? 104 : 96,
+  };
 }
 
 export function starterChoiceSummary(monster: MonsterData): StarterChoiceSummary {
