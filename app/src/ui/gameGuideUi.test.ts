@@ -23,7 +23,9 @@ describe('game guide UI content', () => {
     expect(text).toContain('증상은 텍스트만 표기됩니다.');
     expect(text).toContain('상태이상을 누적시켜 전투를 승리로 이끌어 보세요!');
     expect(text).toContain('상태이상은 종류별로 5스택까지만 쌓입니다.');
-    expect(text).toContain('보스는 10층마다 방어특성이 1개씩 늘어납니다.');
+    expect(text).toContain('5층 단위로 적과 싸우며, 10층마다 적 대신 보스가 등장합니다.');
+    expect(text).toContain('일반 적에게는 방어특성이 없습니다.');
+    expect(text).toContain('보스는 10층 단위로 올라갈수록 방어특성을 1개씩 더 보유합니다.');
     expect(text).toContain('누적 반감은 ×0.25에서 멈춥니다.');
     expect(text).toContain('파티를 여러 타입으로 채워보세요!');
     expect(text).toContain('2페이즈에 돌입해');
@@ -47,6 +49,7 @@ describe('game guide UI content', () => {
     const statusSection = content.sections.find((section) => section.title === '상태와 증상');
     expect(statusSection?.lines[statusSection.lines.length - 1])
       .toBe('상태이상을 누적시켜 전투를 승리로 이끌어 보세요!');
+    expect(content.sections.some((section) => section.title === '보스와 적')).toBe(true);
   });
 
   it('paginates sections so no page overflows the 2x2 panel grid', () => {
