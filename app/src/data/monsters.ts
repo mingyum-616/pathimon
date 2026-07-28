@@ -277,19 +277,6 @@ function newestNoteMonstersFirst(): MonsterData[] {
   return [...NOTE_MONSTERS].reverse();
 }
 
-function randomIndex(length: number, random: RandomSource): number {
-  return Math.min(length - 1, Math.max(0, Math.floor(random() * length)));
-}
-
-function shuffled<T>(items: T[], random: RandomSource): T[] {
-  const result = [...items];
-  for (let index = result.length - 1; index > 0; index -= 1) {
-    const swapIndex = randomIndex(index + 1, random);
-    [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
-  }
-  return result;
-}
-
 function wildRosterType(monster: MonsterData): string {
   if (['연충', '선충', '흡충', '조충', '기생충'].includes(monster.category)) {
     return '기생충';
@@ -302,140 +289,112 @@ function wildRosterType(monster: MonsterData): string {
   return monster.category;
 }
 
-function hasBlockedType(output: MonsterData[], type: string, maxSameTypeRun: number): boolean {
-  if (maxSameTypeRun <= 0 || output.length < maxSameTypeRun) {
-    return false;
-  }
-
-  return output.slice(-maxSameTypeRun).every((monster) => wildRosterType(monster) === type);
-}
-
-function chooseWeightedBucket(
-  buckets: Array<[string, MonsterData[]]>,
-  random: RandomSource,
-): [string, MonsterData[]] {
-  const total = buckets.reduce((sum, [, bucket]) => sum + bucket.length, 0);
-  let target = Math.min(total - 1, Math.max(0, Math.floor(random() * total)));
-
-  for (const bucketEntry of buckets) {
-    target -= bucketEntry[1].length;
-    if (target < 0) {
-      return bucketEntry;
-    }
-  }
-
-  return buckets[buckets.length - 1]!;
-}
-
-function distributeByType(
-  monsters: MonsterData[],
-  random: RandomSource,
-  maxSameTypeRun: number,
-  precedingTail: MonsterData[] = [],
-): MonsterData[] {
-  const buckets = new Map<string, MonsterData[]>();
-
-  for (const monster of monsters) {
-    const type = wildRosterType(monster);
-    buckets.set(type, [...(buckets.get(type) ?? []), monster]);
-  }
-
-  for (const [type, bucket] of buckets) {
-    buckets.set(type, shuffled(bucket, random));
-  }
-
-  // 밴드 경계에서도 같은 계열이 연속하지 않도록 앞 밴드 꼬리를 연속 판정에만 쓰고 결과에는 넣지 않는다.
-  const emitted: MonsterData[] = [];
-  const runWindow: MonsterData[] = [...precedingTail.slice(-maxSameTypeRun)];
-  let remaining = monsters.length;
-
-  while (remaining > 0) {
-    const availableBuckets = [...buckets.entries()].filter(([, bucket]) => bucket.length > 0);
-    const allowedBuckets = availableBuckets.filter(([type]) => !hasBlockedType(runWindow, type, maxSameTypeRun));
-    const candidates = allowedBuckets.length > 0 ? allowedBuckets : availableBuckets;
-    const [, bucket] = chooseWeightedBucket(candidates, random);
-    const monster = bucket.shift();
-
-    if (monster) {
-      emitted.push(monster);
-      runWindow.push(monster);
-      remaining -= 1;
-    }
-  }
-
-  return emitted;
-}
-
 export function monsterBaseStatTotal(monster: MonsterData): number {
   return monster.maxHp + monster.attack + monster.defense;
-}
-
-// 야생 조우는 두 개의 밴드 풀로 갈린다. 완전 정렬이 아니라 **풀만 다르고 순서는 밴드 안에서 무작위**다.
-//   1~60층   : 종합 능력치 ~195 이하 풀
-//   61~100층 : 종합 능력치 140 이상 풀
-// 겹치는 140~195 구간은 양쪽에 나올 수 있어서, 죽고 다시 잡는 흐름이 후반으로 갈수록 자연스럽게 강해진다.
-export const LATE_BAND_START_FLOOR = 61;
-export const EARLY_BAND_MAX_BST = 195;
-export const LATE_BAND_MIN_BST = 140;
-
-function wildFloorCountUpTo(floor: number): number {
-  // 5의 배수 층은 트레이너·보스라 야생이 아니다(state/runState.ts encounterKindForFloor).
-  return Math.max(0, floor - Math.floor(floor / 5));
-}
-
-export function lateBandWildSlotCount(
-  totalFloors = TOTAL_FLOORS,
-  lateBandStartFloor = LATE_BAND_START_FLOOR,
-): number {
-  return Math.max(0, wildFloorCountUpTo(totalFloors) - wildFloorCountUpTo(lateBandStartFloor - 1));
-}
-
-function splitIntoBands(
-  monsters: MonsterData[],
-  lateSlots: number,
-  random: RandomSource,
-): { early: MonsterData[]; late: MonsterData[] } {
-  const lateOnly = shuffled(monsters.filter((m) => monsterBaseStatTotal(m) > EARLY_BAND_MAX_BST), random);
-  const shared = shuffled(
-    monsters.filter((m) => {
-      const bst = monsterBaseStatTotal(m);
-      return bst >= LATE_BAND_MIN_BST && bst <= EARLY_BAND_MAX_BST;
-    }),
-    random,
-  );
-  const earlyOnly = shuffled(monsters.filter((m) => monsterBaseStatTotal(m) < LATE_BAND_MIN_BST), random);
-
-  // 상위 밴드 전용(>195)을 먼저 넣고, 자리가 남으면 공용 구간(140~195)에서 채운다.
-  const late = lateOnly.splice(0, lateSlots);
-  late.push(...shared.splice(0, Math.max(0, lateSlots - late.length)));
-
-  // 상위 밴드 전용이 슬롯보다 많으면 남는 개체는 하위 밴드로 흘려보낸다(밴드 규칙보다 전 종 등장이 우선).
-  const early = [...earlyOnly, ...shared, ...lateOnly];
-  late.push(...early.splice(0, Math.max(0, lateSlots - late.length)));
-
-  return { early, late };
-}
-
-export function createDistributedWildRoster(
-  monsters: MonsterData[],
-  random: RandomSource = Math.random,
-  maxSameTypeRun = 2,
-  lateSlotCount = lateBandWildSlotCount(),
-): MonsterData[] {
-  const lateSlots = Math.min(monsters.length, Math.max(0, lateSlotCount));
-  const { early, late } = splitIntoBands(monsters, lateSlots, random);
-  const earlyRoster = distributeByType(early, random, maxSameTypeRun);
-  const lateRoster = distributeByType(late, random, maxSameTypeRun, earlyRoster);
-
-  return [...earlyRoster, ...lateRoster];
 }
 
 export function wildEncounterRoster(): MonsterData[] {
   return uniqueById(newestNoteMonstersFirst());
 }
 
-export function createWildRosterIds(random: RandomSource = Math.random): string[] {
-  return createDistributedWildRoster(wildEncounterRoster(), random).map((monster) => monster.id);
+export const WILD_ENCOUNTER_SIGMA = 10;
+export const WILD_ENCOUNTER_MIN_WEIGHT = 0.001;
+export const WILD_ENCOUNTER_REPEAT_PENALTY = 0.3;
+const MAX_SAME_WILD_TYPE_RUN = 2;
+
+export function sortedWildEncounterRoster(
+  monsters: MonsterData[] = wildEncounterRoster(),
+): MonsterData[] {
+  return [...monsters].sort((left, right) => (
+    monsterBaseStatTotal(left) - monsterBaseStatTotal(right)
+    || left.id.localeCompare(right.id)
+  ));
+}
+
+export function wildEncounterTargetStat(
+  monsters: MonsterData[],
+  floor: number,
+  totalFloors = TOTAL_FLOORS,
+): number {
+  const sorted = sortedWildEncounterRoster(monsters);
+  if (sorted.length === 0) {
+    throw new Error('wild encounter roster is empty');
+  }
+  if (sorted.length === 1 || totalFloors <= 1) {
+    return monsterBaseStatTotal(sorted[0]);
+  }
+
+  const progress = Math.min(1, Math.max(0, (floor - 1) / (totalFloors - 1)));
+  const position = progress * (sorted.length - 1);
+  const lowerIndex = Math.floor(position);
+  const upperIndex = Math.min(sorted.length - 1, lowerIndex + 1);
+  const fraction = position - lowerIndex;
+  const lowerTotal = monsterBaseStatTotal(sorted[lowerIndex]);
+  const upperTotal = monsterBaseStatTotal(sorted[upperIndex]);
+
+  return lowerTotal + (upperTotal - lowerTotal) * fraction;
+}
+
+export function wildEncounterWeight(
+  monster: MonsterData,
+  targetStat: number,
+  appearanceCount: number,
+): number {
+  const distance = (monsterBaseStatTotal(monster) - targetStat) / WILD_ENCOUNTER_SIGMA;
+  const normalWeight = Math.exp(-0.5 * distance * distance);
+  const baseWeight = Math.max(WILD_ENCOUNTER_MIN_WEIGHT, normalWeight);
+  const repeatCount = Math.max(0, Math.floor(appearanceCount));
+
+  return baseWeight * WILD_ENCOUNTER_REPEAT_PENALTY ** repeatCount;
+}
+
+function withoutThirdSameType(
+  monsters: MonsterData[],
+  recentMonsterIds: string[],
+): MonsterData[] {
+  const recent = recentMonsterIds
+    .slice(-MAX_SAME_WILD_TYPE_RUN)
+    .map((id) => monsters.find((monster) => monster.id === id))
+    .filter((monster): monster is MonsterData => Boolean(monster));
+  if (
+    recent.length < MAX_SAME_WILD_TYPE_RUN
+    || !recent.every((monster) => wildRosterType(monster) === wildRosterType(recent[0]))
+  ) {
+    return monsters;
+  }
+
+  const blockedType = wildRosterType(recent[0]);
+  const alternatives = monsters.filter((monster) => wildRosterType(monster) !== blockedType);
+  return alternatives.length > 0 ? alternatives : monsters;
+}
+
+export function selectWeightedWildMonster(
+  monsters: MonsterData[],
+  floor: number,
+  appearanceCounts: Record<string, number> = {},
+  recentMonsterIds: string[] = [],
+  random: RandomSource = Math.random,
+): MonsterData {
+  const sorted = sortedWildEncounterRoster(monsters);
+  if (sorted.length === 0) {
+    throw new Error('wild encounter roster is empty');
+  }
+
+  const targetStat = wildEncounterTargetStat(sorted, floor);
+  const candidates = withoutThirdSameType(sorted, recentMonsterIds);
+  const weighted = candidates.map((monster) => ({
+    monster,
+    weight: wildEncounterWeight(monster, targetStat, appearanceCounts[monster.id] ?? 0),
+  }));
+  const totalWeight = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+  let roll = Math.min(0.999999999999, Math.max(0, random())) * totalWeight;
+
+  for (const entry of weighted) {
+    roll -= entry.weight;
+    if (roll < 0) return entry.monster;
+  }
+
+  return weighted[weighted.length - 1].monster;
 }
 
 export function starterCandidateRoster(): MonsterData[] {

@@ -1,4 +1,10 @@
-import { createWildRosterIds, MONSTERS, STARTER_ID, TOTAL_FLOORS, wildEncounterRoster } from '../data/monsters';
+import {
+  MONSTERS,
+  selectWeightedWildMonster,
+  STARTER_ID,
+  TOTAL_FLOORS,
+  wildEncounterRoster,
+} from '../data/monsters';
 import { BOSSES, bossIndexById, createBossRosterIds } from '../data/bosses';
 import { TRAINERS } from '../data/trainers';
 import { createMaintenanceInventory } from '../data/shop';
@@ -99,32 +105,26 @@ function evolveMonster(monster: RuntimeMonster, evolvedData: MonsterData, mode: 
   return evolved;
 }
 
-function wildEncounterIndexForFloor(floor: number): number {
-  let wildEncounterIndex = 0;
-
-  for (let currentFloor = 1; currentFloor < floor; currentFloor += 1) {
-    if (encounterKindForFloor(currentFloor) === 'wild') {
-      wildEncounterIndex += 1;
-    }
-  }
-
-  return wildEncounterIndex;
-}
-
-function selectWildMonster(enemyIndex: number | undefined, floor: number, wildRosterIds?: string[]): MonsterData {
-  const monsterById = new Map(MONSTERS.map((monster) => [monster.id, monster]));
-  const runRoster = (wildRosterIds ?? [])
-    .map((monsterId) => monsterById.get(monsterId))
-    .filter((monster): monster is MonsterData => Boolean(monster));
-  const wildRoster = runRoster.length > 0 ? runRoster : wildEncounterRoster();
+function selectWildMonster(
+  enemyIndex: number | undefined,
+  floor: number,
+  appearanceCounts: Record<string, number>,
+  recentMonsterIds: string[],
+  random: () => number,
+): MonsterData {
   const indexedMonster = enemyIndex === undefined ? undefined : MONSTERS[enemyIndex];
 
   if (indexedMonster && indexedMonster.id !== STARTER_ID) {
     return indexedMonster;
   }
 
-  const rosterIndex = enemyIndex === undefined ? wildEncounterIndexForFloor(floor) : enemyIndex;
-  return wildRoster[rosterIndex % wildRoster.length];
+  return selectWeightedWildMonster(
+    wildEncounterRoster(),
+    floor,
+    appearanceCounts,
+    recentMonsterIds,
+    random,
+  );
 }
 
 function bossRosterIndexForFloor(floor: number): number {
@@ -188,7 +188,6 @@ export function createInitialRunState(
   });
 
   const capsuleInventory = createInitialCapsuleInventory();
-  const wildRosterIds = createWildRosterIds(wildRosterRandom);
   const resolvedBossRosterIds = bossRosterIds ? [...bossRosterIds] : createBossRosterIds(wildRosterRandom, TOTAL_FLOORS / 10);
   const bgmSeed = createBgmSeed(wildRosterRandom);
 
@@ -200,7 +199,8 @@ export function createInitialRunState(
     money: 0,
     capsules: totalCapsules(capsuleInventory),
     capsuleInventory,
-    wildRosterIds,
+    wildEncounterCounts: {},
+    wildEncounterHistoryIds: [],
     bossRosterIds: resolvedBossRosterIds,
     party: starterDataList.map((starter) => {
       const monster = createMonsterInstance(starter);
@@ -216,11 +216,16 @@ export function createInitialRunState(
   };
 }
 
-export function enterBattle(state: RunState, enemyIndex?: number): RunState {
+export function enterBattle(
+  state: RunState,
+  enemyIndex?: number,
+  wildEncounterRandom: () => number = Math.random,
+): RunState {
   const nextState: RunState = {
     ...state,
     capsuleInventory: cloneCapsuleInventory(state.capsuleInventory),
-    wildRosterIds: state.wildRosterIds ? [...state.wildRosterIds] : undefined,
+    wildEncounterCounts: { ...(state.wildEncounterCounts ?? {}) },
+    wildEncounterHistoryIds: [...(state.wildEncounterHistoryIds ?? [])],
     bossRosterIds: state.bossRosterIds ? [...state.bossRosterIds] : undefined,
     party: state.party.map(prepareMonsterForBattle),
     enemy: null,
@@ -267,7 +272,21 @@ export function enterBattle(state: RunState, enemyIndex?: number): RunState {
     return nextState;
   }
 
-  const enemyData = selectWildMonster(enemyIndex, nextState.floor, nextState.wildRosterIds);
+  const enemyData = selectWildMonster(
+    enemyIndex,
+    nextState.floor,
+    nextState.wildEncounterCounts ?? {},
+    nextState.wildEncounterHistoryIds ?? [],
+    wildEncounterRandom,
+  );
+  nextState.wildEncounterCounts = {
+    ...(nextState.wildEncounterCounts ?? {}),
+    [enemyData.id]: (nextState.wildEncounterCounts?.[enemyData.id] ?? 0) + 1,
+  };
+  nextState.wildEncounterHistoryIds = [
+    ...(nextState.wildEncounterHistoryIds ?? []),
+    enemyData.id,
+  ].slice(-2);
   nextState.enemy = createMonsterInstance(enemyData);
   nextState.phase = 'battle';
   nextState.lastLog = `${withParticle(nextState.enemy.name, '이')} 나타났다.`;
@@ -279,7 +298,8 @@ export function advanceFromShop(state: RunState): RunState {
   const nextState: RunState = {
     ...state,
     capsuleInventory: cloneCapsuleInventory(state.capsuleInventory),
-    wildRosterIds: state.wildRosterIds ? [...state.wildRosterIds] : undefined,
+    wildEncounterCounts: { ...(state.wildEncounterCounts ?? {}) },
+    wildEncounterHistoryIds: [...(state.wildEncounterHistoryIds ?? [])],
     bossRosterIds: state.bossRosterIds ? [...state.bossRosterIds] : undefined,
     floor: state.floor + 1,
     activeIndex: clampActiveIndex(state.activeIndex, party.length),
@@ -311,7 +331,8 @@ export function healPartyMember(state: RunState, partyIndex: number): RunState {
   const nextState: RunState = {
     ...state,
     capsuleInventory: cloneCapsuleInventory(state.capsuleInventory),
-    wildRosterIds: state.wildRosterIds ? [...state.wildRosterIds] : undefined,
+    wildEncounterCounts: { ...(state.wildEncounterCounts ?? {}) },
+    wildEncounterHistoryIds: [...(state.wildEncounterHistoryIds ?? [])],
     bossRosterIds: state.bossRosterIds ? [...state.bossRosterIds] : undefined,
     party: state.party.map(cloneMonster),
   };
@@ -427,7 +448,8 @@ export function purchaseShopItem(state: RunState, itemId: string): RunState {
   const nextState: RunState = {
     ...state,
     capsuleInventory: cloneCapsuleInventory(state.capsuleInventory),
-    wildRosterIds: state.wildRosterIds ? [...state.wildRosterIds] : undefined,
+    wildEncounterCounts: { ...(state.wildEncounterCounts ?? {}) },
+    wildEncounterHistoryIds: [...(state.wildEncounterHistoryIds ?? [])],
     bossRosterIds: state.bossRosterIds ? [...state.bossRosterIds] : undefined,
     party: state.party.map(cloneMonster),
     shopInventory: inventory,
@@ -498,7 +520,8 @@ export function purchaseShopItemForPartyMember(
   const nextState: RunState = {
     ...state,
     capsuleInventory: cloneCapsuleInventory(state.capsuleInventory),
-    wildRosterIds: state.wildRosterIds ? [...state.wildRosterIds] : undefined,
+    wildEncounterCounts: { ...(state.wildEncounterCounts ?? {}) },
+    wildEncounterHistoryIds: [...(state.wildEncounterHistoryIds ?? [])],
     bossRosterIds: state.bossRosterIds ? [...state.bossRosterIds] : undefined,
     party: state.party.map(cloneMonster),
     shopInventory: inventory,
@@ -593,7 +616,8 @@ export function refreshMaintenanceInventory(state: RunState, roll = Math.random(
   const nextState: RunState = {
     ...state,
     capsuleInventory: cloneCapsuleInventory(state.capsuleInventory),
-    wildRosterIds: state.wildRosterIds ? [...state.wildRosterIds] : undefined,
+    wildEncounterCounts: { ...(state.wildEncounterCounts ?? {}) },
+    wildEncounterHistoryIds: [...(state.wildEncounterHistoryIds ?? [])],
     bossRosterIds: state.bossRosterIds ? [...state.bossRosterIds] : undefined,
     party: state.party.map(cloneMonster),
     shopInventory: ensureMaintenanceInventory(state),

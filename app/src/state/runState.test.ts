@@ -13,14 +13,17 @@ import {
 } from '../battle/turn';
 import { MOVES } from '../data/moves';
 import {
-  createDistributedWildRoster,
-  EARLY_BAND_MAX_BST,
-  LATE_BAND_MIN_BST,
-  lateBandWildSlotCount,
   monsterBaseStatTotal,
+  MONSTERS,
+  selectWeightedWildMonster,
+  sortedWildEncounterRoster,
   STARTER_ID,
   TOTAL_FLOORS,
+  wildEncounterTargetStat,
+  wildEncounterWeight,
   wildEncounterRoster,
+  WILD_ENCOUNTER_MIN_WEIGHT,
+  WILD_ENCOUNTER_REPEAT_PENALTY,
 } from '../data/monsters';
 import { NOTE_MONSTERS } from '../data/pathimonNoteData';
 import { createMonsterInstance } from './factory';
@@ -65,11 +68,14 @@ function sequenceRandom(values: number[]): () => number {
   return () => values[index++] ?? 0.37;
 }
 
-function wildMonsterForRun(state: RunState, index = 0): MonsterData {
-  const monsterId = state.wildRosterIds?.[index];
-  const monster = wildEncounterRoster().find((candidate) => candidate.id === monsterId);
-  if (!monster) throw new Error(`wild monster missing: ${monsterId}`);
-  return monster;
+function wildMonsterForRun(state: RunState): MonsterData {
+  return selectWeightedWildMonster(
+    wildEncounterRoster(),
+    state.floor,
+    state.wildEncounterCounts,
+    state.wildEncounterHistoryIds,
+    () => 0,
+  );
 }
 
 describe('run state loop', () => {
@@ -109,8 +115,9 @@ describe('run state loop', () => {
 
   it('enters a wild encounter without starting a fight', () => {
     const initial = createInitialRunState();
-    const firstWildPathimon = wildMonsterForRun(initial);
-    const state = enterBattle(initial);
+    const state = enterBattle(initial, undefined, () => 0);
+    const firstWildPathimon = wildEncounterRoster().find((monster) => monster.id === state.enemy?.templateId);
+    if (!firstWildPathimon) throw new Error('wild monster missing');
 
     expect(state.phase).toBe('battle');
     expect(state.encounterKind).toBe('wild');
@@ -121,8 +128,9 @@ describe('run state loop', () => {
 
   it('keeps the selected microscope visual style through wild battles', () => {
     const initial = createInitialRunState('challenge', 'micro');
-    const firstWildPathimon = wildMonsterForRun(initial);
-    const state = enterBattle(initial);
+    const state = enterBattle(initial, undefined, () => 0);
+    const firstWildPathimon = wildEncounterRoster().find((monster) => monster.id === state.enemy?.templateId);
+    if (!firstWildPathimon) throw new Error('wild monster missing');
 
     expect(state.enemy?.templateId).toBe(firstWildPathimon.id);
     expect(state.visualStyle).toBe('micro');
@@ -137,129 +145,91 @@ describe('run state loop', () => {
     expect(encounterKindForFloor(20)).toBe('boss');
   });
 
-  it('keeps every active pathimon in the wild pool and never repeats one within a run', () => {
-    // 한 판에 전 종이 등장하도록 설계한 적이 없다. 야생은 활성 패시몬 풀에서 무작위로 뽑고,
-    // 로스터(83종)가 야생 층(80층)보다 많아 매 판 몇 종은 나오지 않는다. 그건 정상이다.
-    // 여기서 지켜야 할 것은 두 가지다 — 풀이 앞쪽 몇 종으로 잘리지 않을 것, 한 판 안에서 겹치지 않을 것.
-    const pool = wildEncounterRoster().map((monster) => monster.id);
-    expect(pool).toContain('anthrax');
-    expect(pool).toContain('cereus');
+  it('sorts every active pathimon by stats without dropping newly added entries', () => {
+    const source = [
+      { ...testMonster('middle', '세균'), maxHp: 40, attack: 30, defense: 20 },
+      { ...testMonster('high', '바이러스'), maxHp: 90, attack: 80, defense: 70 },
+      { ...testMonster('low', '기생충'), maxHp: 20, attack: 10, defense: 10 },
+    ];
 
-    const seen = new Set<string>();
-    const run = createInitialRunState();
-    let wildFloors = 0;
+    const sorted = sortedWildEncounterRoster(source);
 
-    for (let floor = 1; floor <= TOTAL_FLOORS; floor += 1) {
-      if (encounterKindForFloor(floor) !== 'wild') continue;
-      wildFloors += 1;
-      const state = { ...run };
-      state.floor = floor;
-      const battle = enterBattle(state);
-      if (battle.enemy) seen.add(battle.enemy.templateId);
-    }
-
-    expect(wildFloors).toBeGreaterThan(0);
-    expect(seen.size).toBe(wildFloors);
-    expect(pool.length).toBeGreaterThanOrEqual(wildFloors);
+    expect(sorted.map((monster) => monster.id)).toEqual(['low', 'middle', 'high']);
+    expect(sorted).toHaveLength(source.length);
   });
 
-  it('creates one shuffled wild roster when a run starts', () => {
-    const baseRosterIds = wildEncounterRoster().map((monster) => monster.id);
-    const state = createInitialRunState(
-      'challenge',
-      'character',
-      'anthrax',
-      sequenceRandom([0.91, 0.12, 0.77, 0.34, 0.58, 0.03, 0.82, 0.25]),
-    );
-    const runRosterIds = state.wildRosterIds ?? [];
+  it('moves the target stat smoothly from the weakest to the strongest active pathimon', () => {
+    const roster = sortedWildEncounterRoster(wildEncounterRoster());
+    const strongest = roster[roster.length - 1];
 
-    expect(runRosterIds).toHaveLength(baseRosterIds.length);
-    expect(new Set(runRosterIds).size).toBe(baseRosterIds.length);
-    expect([...runRosterIds].sort()).toEqual([...baseRosterIds].sort());
-    expect(runRosterIds).not.toEqual(baseRosterIds);
+    expect(wildEncounterTargetStat(roster, 1)).toBe(monsterBaseStatTotal(roster[0]));
+    expect(wildEncounterTargetStat(roster, TOTAL_FLOORS)).toBe(monsterBaseStatTotal(strongest));
+    expect(wildEncounterTargetStat(roster, 50)).toBeGreaterThan(monsterBaseStatTotal(roster[0]));
+    expect(wildEncounterTargetStat(roster, 50)).toBeLessThan(monsterBaseStatTotal(strongest));
   });
 
-  it('uses the run wild roster order across wild floors', () => {
-    const chosenIds = wildEncounterRoster()
-      .filter((monster) => monster.id !== STARTER_ID)
-      .slice(0, 3)
-      .map((monster) => monster.id)
-      .reverse();
-    const state = createInitialRunState();
-    state.wildRosterIds = chosenIds;
+  it('keeps distant stat candidates possible without a hard cutoff', () => {
+    const roster = sortedWildEncounterRoster(wildEncounterRoster());
+    const strongest = roster[roster.length - 1];
+    const firstFloorTarget = wildEncounterTargetStat(roster, 1);
 
-    expect(enterBattle(state).enemy?.templateId).toBe(chosenIds[0]);
-    expect(enterBattle({ ...state, floor: 2 }).enemy?.templateId).toBe(chosenIds[1]);
-    expect(enterBattle({ ...state, floor: 3 }).enemy?.templateId).toBe(chosenIds[2]);
+    expect(wildEncounterWeight(strongest, firstFloorTarget, 0)).toBe(WILD_ENCOUNTER_MIN_WEIGHT);
+    expect(wildEncounterWeight(strongest, firstFloorTarget, 0)).toBeGreaterThan(0);
   });
 
-  it('disperses same-type wild rosters when alternatives remain', () => {
+  it('multiplies encounter weight by 0.3 for each prior appearance', () => {
+    const monster = testMonster('repeat', '세균');
+    const target = monsterBaseStatTotal(monster);
+    const firstWeight = wildEncounterWeight(monster, target, 0);
+    const secondWeight = wildEncounterWeight(monster, target, 1);
+    const thirdWeight = wildEncounterWeight(monster, target, 2);
+
+    expect(secondWeight).toBeCloseTo(firstWeight * WILD_ENCOUNTER_REPEAT_PENALTY);
+    expect(thirdWeight).toBeCloseTo(firstWeight * WILD_ENCOUNTER_REPEAT_PENALTY ** 2);
+  });
+
+  it('avoids a third consecutive same-type encounter while another type remains', () => {
     const source = [
       testMonster('bacteria-1', '세균'),
       testMonster('bacteria-2', '세균'),
-      testMonster('bacteria-3', '세균'),
-      testMonster('bacteria-4', '세균'),
       testMonster('virus-1', '바이러스'),
-      testMonster('virus-2', '바이러스'),
-      testMonster('virus-3', '바이러스'),
-      testMonster('virus-4', '바이러스'),
-      testMonster('parasite-1', '기생충'),
-      testMonster('parasite-2', '기생충'),
-      testMonster('parasite-3', '기생충'),
-      testMonster('parasite-4', '기생충'),
     ];
 
-    const roster = createDistributedWildRoster(source, sequenceRandom([0.99, 0.02, 0.66, 0.18, 0.42]), 2);
+    const selected = selectWeightedWildMonster(
+      source,
+      1,
+      {},
+      ['bacteria-1', 'bacteria-2'],
+      () => 0,
+    );
 
-    expect(roster).toHaveLength(source.length);
-    expect(roster.map((monster) => monster.id).sort()).toEqual(source.map((monster) => monster.id).sort());
-    for (let index = 2; index < roster.length; index += 1) {
-      const recentTypes = roster.slice(index - 2, index + 1).map((monster) => monster.category);
-      expect(new Set(recentTypes).size).toBeGreaterThan(1);
-    }
+    expect(selected.id).toBe('virus-1');
   });
 
-  it('draws early floors from the low band pool and late floors from the high band pool', () => {
-    const roster = createDistributedWildRoster(wildEncounterRoster());
-    const lateSlots = lateBandWildSlotCount();
-    const earlyRoster = roster.slice(0, roster.length - lateSlots);
-    const lateRoster = roster.slice(roster.length - lateSlots);
+  it('records each selected wild encounter in the run state', () => {
+    const state = createInitialRunState();
+    const firstBattle = enterBattle(state, undefined, () => 0);
+    const firstId = firstBattle.enemy?.templateId;
+    if (!firstId) throw new Error('wild monster missing');
 
-    expect(roster).toHaveLength(85);
-    expect(lateSlots).toBe(32);
-    expect(earlyRoster.every((monster) => monsterBaseStatTotal(monster) <= EARLY_BAND_MAX_BST)).toBe(true);
-    expect(lateRoster.every((monster) => monsterBaseStatTotal(monster) >= LATE_BAND_MIN_BST)).toBe(true);
-  });
+    expect(firstBattle.wildEncounterCounts).toEqual({ [firstId]: 1 });
+    expect(firstBattle.wildEncounterHistoryIds).toEqual([firstId]);
 
-  it('shuffles inside each band instead of sorting the whole roster by stat total', () => {
-    const roster = createDistributedWildRoster(wildEncounterRoster());
-    const earlyTotals = roster
-      .slice(0, roster.length - lateBandWildSlotCount())
-      .map(monsterBaseStatTotal);
-    const isAscending = earlyTotals.every((total, index) => index === 0 || total >= earlyTotals[index - 1]);
+    const secondState = { ...firstBattle, floor: 2, enemy: null };
+    const secondBattle = enterBattle(secondState, undefined, () => 0);
+    const secondId = secondBattle.enemy?.templateId;
+    if (!secondId) throw new Error('second wild monster missing');
 
-    expect(isAscending).toBe(false);
-  });
-
-  it('falls back to the available pool when a band has too few pathimon', () => {
-    const source = [
-      testMonster('bacteria-1', '세균'),
-      testMonster('virus-1', '바이러스'),
-      testMonster('parasite-1', '기생충'),
-    ];
-
-    const roster = createDistributedWildRoster(source, Math.random, 2, 2);
-
-    expect(roster.map((monster) => monster.id).sort()).toEqual(source.map((monster) => monster.id).sort());
+    expect(secondBattle.wildEncounterCounts?.[firstId]).toBeGreaterThanOrEqual(1);
+    expect(secondBattle.wildEncounterCounts?.[secondId]).toBeGreaterThanOrEqual(1);
+    expect(secondBattle.wildEncounterHistoryIds).toHaveLength(2);
   });
 
   it('keeps note-managed pathimon available in the wild encounter roster', () => {
     const openingRouteIds = NOTE_MONSTERS_NEWEST_FIRST.map((monster) => monster.id);
 
     expect(wildEncounterRoster().slice(0, openingRouteIds.length).map((monster) => monster.id)).toEqual(openingRouteIds);
-
-    const runRosterIds = createInitialRunState().wildRosterIds ?? [];
-    expect([...runRosterIds].sort()).toEqual([...openingRouteIds].sort());
+    expect(sortedWildEncounterRoster().map((monster) => monster.id).sort()).toEqual([...openingRouteIds].sort());
   });
 
   it('preserves party hp when a new encounter starts in either mode', () => {
@@ -409,7 +379,7 @@ describe('run state loop', () => {
   it('captures a normal enemy and shows the floor and pathimon memo instead of learning feedback', () => {
     const initial = createInitialRunState();
     const firstWildPathimon = wildMonsterForRun(initial);
-    const battle = enterBattle(initial);
+    const battle = enterBattle(initial, undefined, () => 0);
     if (!battle.enemy) throw new Error('enemy missing');
     battle.enemy.hp = 1;
 
@@ -497,8 +467,7 @@ describe('run state loop', () => {
     const bacteria = wildEncounterRoster().find((monster) => monster.category === '세균');
     if (!bacteria) throw new Error('bacteria missing');
     const state = createInitialRunState();
-    state.wildRosterIds = [bacteria.id];
-    const battle = enterBattle(state);
+    const battle = enterBattle(state, MONSTERS.indexOf(bacteria));
     battle.capsuleInventory.universal = 0;
     battle.capsuleInventory.bacteria = 1;
     battle.capsules = 1;
@@ -740,7 +709,7 @@ describe('run state loop', () => {
   it('asks which party member to release when capturing with a full party', () => {
     const initial = createInitialRunState();
     const firstWildPathimon = wildMonsterForRun(initial);
-    const battle = enterBattle(initial);
+    const battle = enterBattle(initial, undefined, () => 0);
     if (!battle.enemy) throw new Error('enemy missing');
     battle.enemy.hp = 1;
     while (battle.party.length < 6) {
@@ -758,7 +727,7 @@ describe('run state loop', () => {
   it('replaces the selected party member with a pending capture', () => {
     const initial = createInitialRunState();
     const firstWildPathimon = wildMonsterForRun(initial);
-    const battle = enterBattle(initial);
+    const battle = enterBattle(initial, undefined, () => 0);
     if (!battle.enemy) throw new Error('enemy missing');
     battle.enemy.hp = 1;
     while (battle.party.length < 6) {

@@ -433,7 +433,8 @@ export interface RunState {
   money: number;
   capsules: number;
   capsuleInventory: CapsuleInventory;
-  wildRosterIds?: string[];
+  wildEncounterCounts?: Record<string, number>;
+  wildEncounterHistoryIds?: string[];
   bossRosterIds?: string[];
   party: RuntimeMonster[];
   activeIndex: number;

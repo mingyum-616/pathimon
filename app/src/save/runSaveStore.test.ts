@@ -32,6 +32,8 @@ function checkpoint(floor: number): RunCheckpoint {
       encounterKind: floor % 10 === 0 ? 'boss' : 'wild',
       phase: floor % 10 === 0 ? 'bossIntro' : 'battle',
       lastLog: '',
+      wildEncounterCounts: { anthrax: 2 },
+      wildEncounterHistoryIds: ['cereus', 'anthrax'],
     },
   };
 }
@@ -59,6 +61,8 @@ describe('run save slots', () => {
       state: {
         floor: 27,
         party: [{ name: '테스트몬', hp: 44 }],
+        wildEncounterCounts: { anthrax: 2 },
+        wildEncounterHistoryIds: ['cereus', 'anthrax'],
       },
     });
   });

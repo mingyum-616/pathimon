@@ -72,7 +72,8 @@ function cloneState(state: RunState): RunState {
   return {
     ...state,
     capsuleInventory: cloneCapsuleInventory(state.capsuleInventory),
-    wildRosterIds: state.wildRosterIds ? [...state.wildRosterIds] : undefined,
+    wildEncounterCounts: { ...(state.wildEncounterCounts ?? {}) },
+    wildEncounterHistoryIds: [...(state.wildEncounterHistoryIds ?? [])],
     bossRosterIds: state.bossRosterIds ? [...state.bossRosterIds] : undefined,
     party: state.party.map(cloneMonster),
     enemy: state.enemy ? cloneMonster(state.enemy) : null,
