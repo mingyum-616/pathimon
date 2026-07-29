@@ -297,7 +297,7 @@ export function wildEncounterRoster(): MonsterData[] {
   return uniqueById(newestNoteMonstersFirst());
 }
 
-export const WILD_ENCOUNTER_SIGMA = 10;
+export const WILD_ENCOUNTER_SIGMA = 18;
 export const WILD_ENCOUNTER_MIN_WEIGHT = 0.001;
 export const WILD_ENCOUNTER_REPEAT_PENALTY = 0.3;
 const MAX_SAME_WILD_TYPE_RUN = 2;
