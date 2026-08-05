@@ -14,11 +14,9 @@ import { createBossInstance, createMonsterInstance, createTrainerInstance } from
 import { bossMoveEffectiveness, createBossDefenseProfile } from '../battle/bossMatchup';
 import { DEFENSE_COMPRESSION_MIN_SCALE } from '../battle/damage';
 
-const pathimonAssets = import.meta.glob('/public/images/pathimon/*.png', {
-  eager: true,
-  query: '?url',
-  import: 'default',
-});
+// 존재 여부만 보므로 lazy glob으로 둔다. eager로 두면 파일 수가 늘어날수록
+// 495장 전부를 워커 메모리에 올려 collect 단계에서 OOM으로 죽는다(2026-08 실측 63MB/534장).
+const pathimonAssets = import.meta.glob('/public/images/pathimon/*.png');
 
 const pathimonNoteFiles = import.meta.glob('/src/data/pathimon-notes/**/*.md', {
   eager: true,
@@ -26,23 +24,11 @@ const pathimonNoteFiles = import.meta.glob('/src/data/pathimon-notes/**/*.md', {
   import: 'default',
 });
 
-const bossCharacterAssets = import.meta.glob('/public/images/trainers/boss/*.png', {
-  eager: true,
-  query: '?url',
-  import: 'default',
-});
+const bossCharacterAssets = import.meta.glob('/public/images/trainers/boss/*.png');
 
-const trainerRootAssets = import.meta.glob('/public/images/trainers/*.png', {
-  eager: true,
-  query: '?url',
-  import: 'default',
-});
+const trainerRootAssets = import.meta.glob('/public/images/trainers/*.png');
 
-const trainerCharacterAssets = import.meta.glob('/public/images/trainers/trainer/*.png', {
-  eager: true,
-  query: '?url',
-  import: 'default',
-});
+const trainerCharacterAssets = import.meta.glob('/public/images/trainers/trainer/*.png');
 
 function readPngSize(path: string): { width: number; height: number } {
   const bytes = readFileSync(path);
@@ -181,7 +167,8 @@ describe('Pathimon data', () => {
     // `유레아플라`(57번)는 강의 근거가 없어 `마이코막` 노트의 감별점으로 흡수하며 제외했다.
     // `레트로잠`(31번, HIV), `가드네라`(58번), `노카가지`(59번)는 승격을 취소했다.
     // 레트로잠은 강의 미도착, 가드네라는 강의 근거 부족, 노카가지는 사용자 보류 결정에 따른다.
-    expect(NOTE_MONSTERS).toHaveLength(85);
+    // 85 → 90. 67강(간염바이러스) 5종이 기말범위 착수 배치로 120~124번에 등록됐다.
+    expect(NOTE_MONSTERS).toHaveLength(165);
     expect(NOTE_MONSTERS.map((monster) => monster.name).slice(0, 5)).toEqual([
       '탄저록스',
       '세레우톡스',
@@ -195,8 +182,19 @@ describe('Pathimon data', () => {
     // 이름에 `-유충`을 붙인다. 노트의 `진화: 패턴 B`(사람 안에서 성충이 되지 못함)와 어긋나는 지점이라 재검토 대상이다.
     expect(NOTE_MONSTERS[72]?.name).toBe('기어가기-유충');
     // 85~89번: 55강(이질아메바·파울러자유아메바·가시아메바) + 61강(대장섬모충·폐포자충) 신규 5종을 selections 끝에 이어 붙였다.
-    // 폐포자충(폐포지롱)은 로스터 최초의 진균이자 마지막 selection이라 꼬리 앵커가 여기로 바뀐다.
-    expect(NOTE_MONSTERS[NOTE_MONSTERS.length - 1]?.name).toBe('폐포지롱');
+    // 120~124번: 67강 간염바이러스 5종(HAV~HEV)이 기말범위 착수 배치로 그 뒤에 붙었다.
+    // 번호가 90~119를 건너뛴 것은 60·62~66강 후보에 예약된 구간이기 때문이다(docs/pathimon-candidates-60-71.md).
+    // 125~130번: 68강 말라리아 5종 + 바베스열원충이 배치 2회차로 이어 붙었다.
+    // 131~133번: 65강 리트로바이러스 2종 + 63강 인플루엔자 A형이 배치 3회차로 이어 붙었다.
+    // #131은 STATS.md §5 앵커 #31이 예약해 둔 `레트로잠`(HIV)이며, 강의 미도착으로 비어 있던 자리를 65강이 채웠다.
+    // 134~140번: 71강 피코르나 5종(폴리오·콕사키·EV71·리노·구제역) + 레오/칼리시 2종이 배치 4회차로 붙었다.
+    // 141~144번: 70강 코로나 3종 + 프리온이 배치 5회차로 붙었다. #144 `프리온`은 VOCAB.md §7 프리온 특례의 첫 적용이며
+    // 로스터 최초의 프리온 타입이다(스탯 상한·상성 가드레일 면제).
+    // 145~149번: 69강 종양유발바이러스 5종(HPV 고위험·저위험, BK, JC, 메르켈)이 배치 6회차로 붙었다.
+    // 같은 강의의 EBV는 신규가 아니라 기존 `엡스타인` 노트를 69강으로 보강했다.
+    // 150~154번: 64강 포자충 5종(작은와포자충·톡소포자충·사람등포자충·사람원포자충·린데만근육포자충)이 배치 7회차로 붙었다.
+    // 187번~: 59·39·40강 누락분 보완 배치 12회차 착수(중간범위). RSV가 파라믹소바이러스과 총론을 진다.
+    expect(NOTE_MONSTERS[NOTE_MONSTERS.length - 1]?.name).toBe('젠타마이신');
   });
 
   it('keeps generation source sheets out of public runtime assets', () => {
@@ -291,11 +289,56 @@ describe('Pathimon data', () => {
   describe('treatment coverage', () => {
     // ×4를 만드는 직접 처치약이 현실에 없어 ×2(물리제거·대증)만 있는 종. 이것 자체가 학습 내용이다.
     //  아니사키·눈물안충·스파르강 = 수술로만 제거 / 시가콜리(EHEC) = 항생제 금기, 지지요법만.
+    //  돼지황달(HEV) = 67강이 가열·손 씻기(환경차단)와 보존적 치료만 말한다. 특이 항바이러스제도 국내 백신도 없다.
     const X2_ONLY_IDS = new Set([
       'anisakis_simplex',
       'thelazia_callipaeda',
       'sparganum_spirometra_spp',
       'ehec_stec_e_coli_o157_h7',
+      'hev',
+      // 66강 5종. 강의가 이들에게 백신도 특이 치료제도 제시하지 않는다. 실질적 방어선이
+      // 매개체 회피·격리·지지요법뿐이며, `개입 수단이 없다`는 사실 자체가 학습 내용이다.
+      'sin_nombre_virus',
+      // 60강 2종. HBoV는 배양이 안 돼 백신·치료제 개발이 멈춰 있고, 엠폭스는 백시니아 계열
+      // 교차 효과가 미확정이라 강의가 확정 지식으로 다루지 말라고 못 박는다.
+      'human_bocavirus',
+      'mpox_virus',
+      // 59강 3종. 강의가 치료제도 백신도 없다고 못 박는다(hMPV·PIV·헤니파). 실질적 방어선이
+      // 대증치료와 전파 차단뿐이며, 헤니파는 BSL-4 취급이라 개발 접근 자체가 제한된다.
+      'human_metapneumovirus',
+      'parainfluenza_virus',
+      'henipavirus',
+      // 말랑사마귀. 60강이 약제를 제시하지 않고 1~2주 자연 회복을 명시한다. 직접 처치가
+      // 병터 물리 제거뿐이라 ×2에 머무는데, 치료 목적이 살균이 아니라 전파 차단·미용이라는 사실 자체가 학습 내용이다.
+      'molluscum_contagiosum_virus',
+      'zika_virus',
+      'chikungunya_virus',
+      'sfts_virus',
+      'ebola_virus',
+      // 스무해백혈(HTLV-1). 65강이 항바이러스제도 백신도 제시하지 않는다. 20~30년 무증상기 동안 개입 기회가 없어
+      // 실질적 방어선이 수유 금지·헌혈 선별 같은 전파 차단뿐이며, 그 사실 자체가 학습 내용이다.
+      'htlv_1',
+      // 손발입·침묵마비(콕사키·EV71). 71강이 비폴리오 엔테로바이러스에 백신도 특이 항바이러스제도 없다고 못 박는다.
+      'coxsackievirus',
+      'enterovirus_71',
+      // 서른셋도(리노). 혈청형 150종 이상에 교차 방어가 없어 백신이 성립하지 않고 특이 치료제도 없다.
+      'rhinovirus',
+      // 열알갱이(노로). 배양이 어려워 백신 개발 자체가 막혀 있고 대증요법뿐이다.
+      'norovirus',
+      // 사라진사스(SARS-CoV). 유행이 짧게 끝나 백신도 치료제도 개발되지 않았다 — 전파 차단만으로 통제된 종.
+      'sars_cov',
+      // 낙타원내(MERS). 70강이 백신·치료제가 아직 없다고 못 박는다 — 치명률 1위인데 잡을 약이 없는 조합.
+      'mers_cov',
+      // 접힘그자체(프리온). VOCAB.md §7 특례 — 항생제·항바이러스제·항기생충제 전 계열 무효이고 백신도 성립하지 않는다.
+      // 유효한 처치가 존재하지 않는다는 사실 자체가 학습 포인트이므로 가드레일의 명시적 예외다.
+      'prion_cjd',
+      // 이식신탈락(BK)·백질구멍(JC). 69강이 둘 다 특이 치료가 없다고 못 박는다 — 대응은 면역억제 강도 조절뿐이다.
+      'bk_virus',
+      'jc_virus',
+      // 촉각암(메르켈). HPV와 달리 예방 백신이 없고 특이 항바이러스제도 없다. 남는 것은 절제와 보조인자 관리뿐이다.
+      'merkel_cell_polyomavirus',
+      // 근육낭포자(린데만근육포자충). 64강이 표적 치료가 확립돼 있지 않다고 적는다 — 예방(가열)과 낭 제거뿐이다.
+      'sarcocystis_lindemanni',
     ]);
 
     function bestMultiplier(monster: (typeof NOTE_MONSTERS)[number]): number {
@@ -341,6 +384,42 @@ describe('Pathimon data', () => {
   // VOCAB.md §2-3은 `없음`을 정식 evasion 값으로 둔다("특기할 회피 구조 없음").
   // 아래는 강의 근거상 회피 구조가 실제로 없다고 판정한 노트다. 그 외에 'none'이 나오면 파서 매핑 실패로 본다.
   const INTENTIONAL_NO_EVASION = [
+    // 66강 6종. 강의가 이들의 면역회피 구조를 다루지 않는다. 병독성이 회피가 아니라 각각
+    // 혈관내피 친화성(한타 2종)·조직 향성(일본뇌염·황열·지카)·개입 수단 부재(SFTS)에서 온다.
+    // 60강 5종. 강의가 이들의 면역회피 구조를 다루지 않는다. B19는 숙주 쪽 항체 결손이,
+    // 폭스 3종은 병독성·숙주 범위가 축이고 회피 기전은 서술되지 않는다.
+    // 77강 5종. 강의가 이들의 면역회피 구조를 다루지 않는다. 결과를 가르는 것이 회피가 아니라
+    // 침범 깊이(말라세지아·피부사상균·스포로트릭스)·지리(블라스토/파라콕시)·형태 전환(칸디다)이다.
+    // 39·40강 2종. 강의가 회피 구조를 다루지 않는다. 캄필로박터는 미호기성이 회피가 아니라
+    // 산소 요구 조건이고, 렙토스피라는 세포내 기생 없이 뚫고 들어가는 것이 정체성이다.
+    'campylobacter_jejuni',
+    'leptospira_interrogans',
+    'respiratory_syncytial_virus',
+    'human_metapneumovirus',
+    'parainfluenza_virus',
+    'measles_virus',
+    'mumps_virus',
+    'rubella_virus',
+    'henipavirus',
+    'malassezia_furfur',
+    'dermatophytes',
+    'sporothrix_schenckii',
+    'blastomyces_and_paracoccidioides',
+    'candida_albicans',
+    'mucormycetes',
+    'parvovirus_b19',
+    'human_bocavirus',
+    'variola_virus',
+    'molluscum_contagiosum_virus',
+    'mpox_virus',
+    'hantaan_virus',
+    'sin_nombre_virus',
+    'japanese_encephalitis_virus',
+    'yellow_fever_virus',
+    'zika_virus',
+    'chikungunya_virus',
+    'sfts_virus',
+    'ebola_virus',
     'clonorchis_sinensis', // 프라지콴텔 1~2일이면 구제된다. 방어 60은 담관이라는 위치에서 온다
     'taenia_solium', // 장 성충형. 프라지콴텔 단회로 끝난다. 낭종은 분리된 `물혹돼지`가 가져갔다
     'bacteroides_spp', // 46·20·21강 어디에도 협막 언급이 없다. 장관 파열이라는 계기로만 성립하는 내인성 감염
@@ -365,6 +444,13 @@ describe('Pathimon data', () => {
     'corynebacterium_diphtheriae', // 디프막스. v1 `위막장벽`은 VOCAB §2-6이 병인 산물로 분류해 공격기로 이관했다. 24강이 회피 구조를 다루지 않는다
     'schistosoma', // 달팽혈충 (id는 NOTE_OPTION_OVERRIDES가 지정). v1 `항원위장`은 38·30강 어디에도 없다. 14강이 숙주 항원 가장을 기생충 일반 기전으로만 가르치고 종을 지목하지 않는다
     'naegleria_fowleri', // 뇌먹아메바. 55강이 못 박은 대로 위협은 은신·약제저항이 아니라 속도다 — 암포테리신 B는 듣지만 급성 경과·진단 지연으로 진다. 회피 구조 없는 유리대포로 설계했다
+    'hdv', // 껍질빌림. HBsAg 차용은 회피 구조가 아니라 결손을 메우는 의존이다(67강 슬라이드 7·17). 회피가 아닌 것을 evasion으로 올리지 않았다
+    'plasmodium_malariae', // 사일띠콩. 68강이 이 종의 회피 구조를 다루지 않는다. 수십 년 재연은 널리 알려졌지만 68강 본문에 근거가 없어 `잠복`을 붙이지 않았다
+    'plasmodium_knowlesi', // 원숭이넘김. 68강이 배정한 분량이 세 문장뿐이고 회피 구조를 다루지 않는다. 근거 없는 축을 감으로 채우지 않았다
+    'foot_and_mouth_disease_virus', // 굽물집. 71강이 아프토바이러스에 한 문단만 배정하고 회피 구조를 다루지 않는다
+    'isospora_belli', // 길쭉난포낭. 64강이 회피 구조를 다루지 않는다. 자가감염 회로도 낭도 없어 약이 닿지 않는 자리가 없다
+    'cyclospora_cayetanensis', // 얼룩염색. 위와 동일. 역학적 특징(수입 농산물)은 회피가 아니라 생활사라 전용기로 보냈다
+    'babesia_microti', // 십자바베. 비장절제자에서 중증인 것은 회피 구조가 아니라 숙주 결손이고, 경란전달은 생활사다. 둘 다 evasion 축이 아니라 기술·학습포인트로 보냈다
   ];
 
   it('does not leave selected first-wave notes with an accidental empty defense trait', () => {
@@ -412,8 +498,7 @@ describe('Pathimon data', () => {
       'ascaris',
       'schistosoma',
     ]));
-    expect(NOTE_MONSTERS).toHaveLength(85);
-    expect(monsterIds).not.toContain('hiv');
+    expect(NOTE_MONSTERS).toHaveLength(165);
     expect(monsterIds).not.toContain('gardnerella_vaginalis');
     expect(monsterIds).not.toContain('nocardia_spp');
     expect(MONSTERS.length).toBeGreaterThan(NOTE_MONSTERS.length);
@@ -565,6 +650,7 @@ describe('Pathimon data', () => {
       'acid_tolerance',
       'acidfast',
       'alcohol_disinfection',
+      'antibody_enhancement',
       'antigen_disguise',
       'antigen_var',
       'antitoxin',
@@ -600,6 +686,7 @@ describe('Pathimon data', () => {
       'microbiota_defense',
       'mucociliary',
       'mycology_master',
+      'neural_transit',
       'no_nucleic',
       'none',
       'oxidative_neutral',
@@ -611,6 +698,7 @@ describe('Pathimon data', () => {
       'safer_sex',
       'spore',
       'tissue_migration',
+      'vascular_sequestration',
       'vector_control',
       'virology_master',
       'wound_asepsis',
@@ -699,6 +787,9 @@ describe('Pathimon data', () => {
       'acid_tolerance',
       'environmental_resistance',
       'iron_piracy',
+      'vascular_sequestration',
+      'antibody_enhancement',
+      'neural_transit',
     ] as const;
 
     for (const ability of evasionOnlyAbilities) {

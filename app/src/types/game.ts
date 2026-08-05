@@ -105,6 +105,9 @@ export type AbilityId =
   | 'iron_piracy'
   // 성충이 조직을 옮겨 다니며 정착을 회피한다. `larval_migration`(유충)과 생활사 단계가 다르다.
   | 'tissue_migration'
+  | 'vascular_sequestration'
+  | 'antibody_enhancement'
+  | 'neural_transit'
   // 보스(사람) 전용 방어특성. 10층마다 1개씩 늘어나 후반 보스의 난도를 만든다(state/factory.ts selectBossAbilities).
   // 계열 축 — 공격해 오는 패시몬의 category를 본다.
   | 'virology_master'

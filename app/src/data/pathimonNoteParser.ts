@@ -122,6 +122,8 @@ const TAG_BY_NOTE_VALUE: Record<string, TagValue> = {
   이형성: 'fungal_dimorphic',
   // 61강(폐포자충) 반영. 진균으로 분류되나 효모형·균사형 어느 쪽도 아니라, 벽 태그를 `fungal`로 직접 받는다.
   진균: 'fungal',
+  // 70강(프리온). VOCAB §7 특례. 세포벽도 외피도 없는 단백질이므로 벽 태그는 `none`이 정확하다.
+  변형단백질: 'none',
   // 54강(원충 총론) 반영. `protozoa`는 TagValue·캡슐·라벨에 이미 있었는데 노트 어휘만 비어 있었다.
   원충: 'protozoa',
   편모충: 'protozoa',
@@ -334,6 +336,9 @@ const ABILITY_BY_EVASION_VALUE: Record<string, AbilityId> = {
   낭종: 'cyst',
   유충이행: 'larval_migration',
   조직이행: 'tissue_migration',
+  혈관격리: 'vascular_sequestration',
+  항체증강: 'antibody_enhancement',
+  신경이행: 'neural_transit',
   항원위장: 'antigen_disguise',
   자가감염: 'autoinfection',
   내성효소: 'antitoxin',
@@ -626,6 +631,12 @@ const X4_DRUG_CLASSES = new Set([
 const IMMUNE_VACCINE_CLASSES = new Set(['선천면역', '세포성면역', '백신·항체']);
 const PHYSICAL_COUNTERMEASURE_CLASS = '물리제거';
 const PHYSICAL_REMOVAL_TAG = '물리제거';
+// ×2 전파차단 계열 (VOCAB.md §6, v2.8에서 구 `환경차단` 한 칸을 쪼갠 것).
+// 물리제거와 같은 방식으로 **계열명 자체를 증상/태그에 얹어** ×2를 만든다.
+// 뭉뚱그린 `환경차단`은 계열 이름이 아무것도 가르치지 못했다 — 폐흡충의 가열과 시겔라의 손 씻기가 같은 칸이었다.
+const TRANSMISSION_BLOCK_CLASSES = new Set([
+  '가열살균', '식수·식품위생', '손위생', '매개체방제', '멸균·격리', '노출차단', '재감염차단',
+]);
 
 // "이소니아지드·리팜핀·에탐부톨·피라진아마이드 4제", "프라지콴텔 고용량", "고용량 페니실린", "리팜핀 유지요법"처럼
 // 용량·요법 수식어가 붙어도 약물명 코어가 기술 targetTags와 매칭되게 다듬는다(splitCountermeasureList가 `·`로 이미 쪼갠다).
@@ -641,12 +652,14 @@ interface ParsedV2Countermeasures {
   direct: string[];
   drugClasses: Record<string, string>;
   physical: boolean;
+  transmissionBlocks: string[];
   sawV2: boolean;
 }
 
 function parseV2Countermeasures(lines: string[]): ParsedV2Countermeasures {
   const direct: string[] = [];
   const drugClasses: Record<string, string> = {};
+  const transmissionBlocks: string[] = [];
   let physical = false;
   let sawV2 = false;
 
@@ -662,6 +675,11 @@ function parseV2Countermeasures(lines: string[]): ParsedV2Countermeasures {
 
     if (cls === PHYSICAL_COUNTERMEASURE_CLASS) {
       physical = true;
+      continue;
+    }
+    // 전파차단 계열은 약물이 아니라 경로를 끊는 처치다 → ×4가 아니라 계열명을 증상/태그로 올려 ×2를 만든다.
+    if (TRANSMISSION_BLOCK_CLASSES.has(cls)) {
+      transmissionBlocks.push(cls);
       continue;
     }
     // 면역·백신은 계열 문자열 자체를 direct로 → 특정 약물명 없이 계열 매칭(선천/세포성/백신·항체).
@@ -681,7 +699,7 @@ function parseV2Countermeasures(lines: string[]): ParsedV2Countermeasures {
     direct.push(...drugs);
   }
 
-  return { direct: uniqueTerms(direct), drugClasses, physical, sawV2 };
+  return { direct: uniqueTerms(direct), drugClasses, physical, transmissionBlocks: uniqueTerms(transmissionBlocks), sawV2 };
 }
 
 function parseCountermeasures(lines: string[], moves: NoteMove[]): CountermeasureProfile {
@@ -693,7 +711,7 @@ function parseCountermeasures(lines: string[], moves: NoteMove[]): Countermeasur
 
   return {
     direct,
-    symptomTags: uniqueTerms([...manualSymptomTags, ...moveSymptoms, ...physicalTag]),
+    symptomTags: uniqueTerms([...manualSymptomTags, ...moveSymptoms, ...physicalTag, ...v2.transmissionBlocks]),
     directDrugClasses: v2.drugClasses,
   };
 }

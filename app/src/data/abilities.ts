@@ -209,6 +209,12 @@ export const ABILITIES: Record<AbilityId, AbilityData> = {
   environmental_resistance: { id: 'environmental_resistance', name: '환경저항' },
   iron_piracy: { id: 'iron_piracy', name: '철획득' },
   tissue_migration: { id: 'tissue_migration', name: '조직이행' },
+  // 68강. 열대열원충 감염 적혈구가 PfEMP-1으로 내피에 붙어 비장 여과를 피한다(VOCAB v2.9 `혈관격리`).
+  vascular_sequestration: { id: 'vascular_sequestration', name: '혈관격리' },
+  // 66강. 뎅기 이형 재감염에서 비중화 항체가 Fc 수용체로 감염을 늘린다(VOCAB v3.0 `항체증강`).
+  antibody_enhancement: { id: 'antibody_enhancement', name: '항체증강' },
+  // 66강. 광견병이 혈류 대신 축삭 안을 거슬러 올라 항체 접근을 피한다(VOCAB v3.0 `신경이행`).
+  neural_transit: { id: 'neural_transit', name: '신경이행' },
   lysozyme: {
     id: 'lysozyme',
     name: '라이소자임',
